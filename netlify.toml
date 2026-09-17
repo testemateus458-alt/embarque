@@ -1,0 +1,5 @@
+[build]
+  command = "npm run build:next"
+
+[build.environment]
+  NODE_VERSION = "22"
