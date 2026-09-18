@@ -72,14 +72,14 @@ export default function Home() {
       .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
       .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},()=>void reload()).subscribe(status=>setConnection(status==='SUBSCRIBED'?'Conectado': 'Reconectando'));
-    const refresh=setInterval(()=>void reload(),60000);
+    const refresh=setInterval(()=>void reload(),5000);
     return()=>{active=false;clearInterval(refresh);auth.subscription.unsubscribe();void supabase!.removeChannel(channel)};
   },[]);
 
   async function reload(){
     if(!supabase)return;
     const {data:{user}}=await supabase.auth.getUser();
-    if(!user){const [l,d]=await Promise.all([supabase.from("shipments").select("*").order("scheduled_at"),supabase.from("docks").select("*").order("id")]);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setLoading(false);return;}
+    if(!user){const [l,d]=await Promise.all([supabase.from("shipments").select("*").order("scheduled_at"),supabase.from("docks").select("*").order("id")]);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setConnection("Conectado");setLoading(false);return;}
     const [p,l,d]=await Promise.all([
       supabase.from("profiles").select("*").eq("id",user.id).single(),
       supabase.from("shipments").select("*").order("scheduled_at"),
