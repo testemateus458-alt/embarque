@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react"; import { createClient } from "@supabase/supabase-js";
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Clock,
   History, LogOut, Monitor, Package, Pencil, Plus, Search, Settings2,
@@ -10,7 +10,7 @@ type Shipment={id:string;number:string;nf:string;destination:string;carrier:stri
 type Profile={id:string;name:string;role:"visualizador"|"operador"|"admin";active:boolean};
 type Audit={id:number;shipment_id:string;shipment_number:string;action:string;actor_name:string;created_at:string;before_data:Shipment|null;after_data:Shipment|null};
 type Dock={id:number;name:string};
-const supabase:any=null;
+const supabase:any = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) : null;
 const demoDocks:Array<Dock>=Array.from({length:6},(_,i)=>({id:i+1,name:"Doca 0"+(i+1)}));
 function demoLoads():Shipment[]{const places=["São Paulo, SP","Curitiba, PR","Campinas, SP","Belo Horizonte, MG","Joinville, SC","Rio de Janeiro, RJ","Santos, SP","Goiânia, GO","Sorocaba, SP","Londrina, PR","Vitória, ES","Ribeirão Preto, SP"];const statuses=["Pendente","Em processo","Falta item","Concluído"];return places.map((destination,i)=>({id:"demo-"+i,number:String(10706+i),nf:String(89301+i),destination,carrier:["PETROLÂNDIA","Unidade Norte","Linha Industrial"][i%3],driver:["Carlos Oliveira","Marcos Santos","Ana Ribeiro","Paulo Costa"][i%4],plate:["ABC1D23","FGR4H56","JKL7M89"][i%3],vehicle:i%2?"Truck":"Carreta",dock_id:null,scheduled_at:new Date(Date.now()+(i-3)*25*60000).toISOString(),volumes:21+i*3,weight:2800+i*600,responsible:["Juliana Lima","Rafael Souza"][i%2],notes:i===0?"Separar conforme romaneio 3201.":"",missing_item_notes:i%4===2?"Faltam 3 caixas do item 5087 — filme stretch 500 mm.":"",status:statuses[i%4],version:1,started_at:i%4!==0?new Date(Date.now()-(i+1)*600000).toISOString():null,shipped_at:i%4===3?new Date().toISOString():null}));}import { STAGES, assertDockAvailable, isLate, validateShipment } from "@/lib/domain.mjs";
 
@@ -52,7 +52,7 @@ export default function Home() {
   const [unlockOpen,setUnlockOpen] = useState(false);
   const [demoPassword,setDemoPassword] = useState("");
   const [accessError,setAccessError] = useState("");
-  const canWrite = (profile?.role === "operador" || profile?.role === "admin") && (!demo || demoUnlocked);
+  const canWrite = (profile?.role === "operador" || profile?.role === "admin") && demoUnlocked;
 
   useEffect(()=>{ setNow(Date.now()); const timer=setInterval(()=>setNow(Date.now()),1000); return()=>clearInterval(timer); },[]);
   useEffect(()=>{if(!demo)return;try{const saved=localStorage.getItem("packem-shipments");if(saved)setLoads(JSON.parse(saved) as Shipment[])}catch{}finally{setDemoReady(true)}},[demo]);
@@ -63,11 +63,11 @@ export default function Home() {
     let active=true;
     async function bootstrap(){
       const {data:{session}}=await supabase!.auth.getSession();
-      if(!session){if(active)setLoading(false);return;}
+      if(!session){if(active){setProfile({id:"public",name:"Operação",role:"admin",active:true});setLoading(false);}return;}
       await reload();
     }
     bootstrap();
-    const {data:auth}=supabase.auth.onAuthStateChange((_event,session)=>{ if(!session){setProfile(null);setLoading(false);} else void reload(); });
+    const {data:auth}=supabase.auth.onAuthStateChange((_event: unknown,session: any)=>{ if(!session){setProfile(null);setLoading(false);} else void reload(); });
     const channel=supabase.channel("nexo-operation")
       .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
@@ -140,7 +140,7 @@ export default function Home() {
   if(loading)return <div className="loading"><Activity className="spin"/> Sincronizando operação…</div>;
   return <main className={`shell ${tv?"tv":""}`}>
     <div className="ambient-grid" aria-hidden="true"><i/><i/><i/></div>
-    <header><button className="brand" onClick={()=>setView("board")}><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></button><span className="live"><i/> {connection.toUpperCase()}</span><nav><button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}><Activity size={16}/> Dashboard</button><button className={view==="board"?"active":""} onClick={()=>setView("board")}>Operação</button><button className={view==="history"?"active":""} onClick={()=>setView("history")}><History size={16}/> Histórico</button>{profile?.role==="admin"&&<button className={view==="team"?"active":""} onClick={()=>setView("team")}><Users size={16}/> Equipe</button>}</nav>{demo&&!demoUnlocked&&<button className="unlock-button" onClick={()=>{setAccessError("");setUnlockOpen(true)}}>Liberar alterações</button>}<button onClick={async()=>{setTv(!tv);if(!tv)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}}><Monitor size={16}/> {tv?"Sair da TV":"Modo TV"}</button>{!demo&&<button title="Sair" onClick={()=>supabase!.auth.signOut()}><LogOut size={16}/></button>}</header>
+    <header><button className="brand" onClick={()=>setView("board")}><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></button><span className="live"><i/> {connection.toUpperCase()}</span><nav><button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}><Activity size={16}/> Dashboard</button><button className={view==="board"?"active":""} onClick={()=>setView("board")}>Operação</button><button className={view==="history"?"active":""} onClick={()=>setView("history")}><History size={16}/> Histórico</button>{profile?.role==="admin"&&<button className={view==="team"?"active":""} onClick={()=>setView("team")}><Users size={16}/> Equipe</button>}</nav>{!demoUnlocked&&<button className="unlock-button" onClick={()=>{setAccessError("");setUnlockOpen(true)}}>Liberar alterações</button>}<button onClick={async()=>{setTv(!tv);if(!tv)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}}><Monitor size={16}/> {tv?"Sair da TV":"Modo TV"}</button>{!demo&&<button title="Sair" onClick={()=>supabase!.auth.signOut()}><LogOut size={16}/></button>}</header>
     {demo&&<div className="notice"><ShieldCheck size={16}/> Demonstração segura · dados ilustrativos · configure o Supabase para salvar e compartilhar</div>}
     {message&&<div className="toast" role="status">{message}<button onClick={()=>setMessage("")}><X size={16}/></button></div>}
     {unlockOpen&&<DemoUnlock password={demoPassword} setPassword={setDemoPassword} submit={event=>{unlockDemo(event);if(demoPassword===DEMO_PASSWORD)setUnlockOpen(false)}} onClose={()=>setUnlockOpen(false)} error={accessError}/>}
