@@ -34,7 +34,7 @@ export default function Home() {
   const [tv,setTv] = useState(false); useEffect(()=>{const sync=()=>setTv(Boolean(document.fullscreenElement));document.addEventListener("fullscreenchange",sync);return()=>document.removeEventListener("fullscreenchange",sync)},[]);
   const [query,setQuery] = useState("");
   const [page,setPage] = useState(1);
-  const [stageFilter,setStageFilter] = useState("Em processo");
+  const [stageFilter,setStageFilter] = useState("Todos");
   useEffect(()=>setPage(1),[query,stageFilter]);
   const [connection,setConnection] = useState(demo?'Demonstração':'Conectando');
   const [showFilters,setShowFilters] = useState(false);
