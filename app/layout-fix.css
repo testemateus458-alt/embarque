@@ -19,3 +19,11 @@
 .empty-state svg { color: #ff641f !important; }
 .empty-state h3 { color: #f5f7fa !important; }
 .empty-state p { color: #aab4c3 !important; }
+
+/* Photos attached to a shipment. */
+.photo-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;position:relative;overflow:hidden}
+.photo-action input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.photo-preview{width:54px;height:42px;border:1px solid rgba(255,255,255,.18);border-radius:7px;overflow:hidden;padding:0;background:#111;position:absolute;right:18px;bottom:14px;z-index:4}
+.photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.load-photo{margin:16px 0;border:1px solid #4a4f58;border-radius:10px;overflow:hidden;background:#17191d}
+.load-photo img{display:block;width:100%;max-height:360px;object-fit:contain}
