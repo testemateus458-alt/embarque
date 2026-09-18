@@ -57,7 +57,7 @@ export default function Home() {
   useEffect(()=>{ setNow(Date.now()); const timer=setInterval(()=>setNow(Date.now()),1000); return()=>clearInterval(timer); },[]);
   useEffect(()=>{if(!demo)return;try{const saved=localStorage.getItem("packem-shipments");if(saved)setLoads(JSON.parse(saved) as Shipment[])}catch{}finally{setDemoReady(true)}},[demo]);
   
-  useEffect(()=>{if(demo&&demoReady)localStorage.setItem("packem-shipments",JSON.stringify(loads))},[demo,demoReady,loads]);
+  useEffect(()=>{if(demo&&demoReady)localStorage.setItem("packem-shipments",JSON.stringify(loads))},[demo,demoReady,loads]);useEffect(()=>{if(!demo&&profile?.id==="public")void reload()},[demo,profile]);
   useEffect(()=>{
     if(!supabase) return;
     let active=true;
@@ -79,7 +79,7 @@ export default function Home() {
   async function reload(){
     if(!supabase)return;
     const {data:{user}}=await supabase.auth.getUser();
-    if(!user){setLoading(false);return;}
+    if(!user){const [l,d]=await Promise.all([supabase.from("shipments").select("*").order("scheduled_at"),supabase.from("docks").select("*").order("id")]);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setLoading(false);return;}
     const [p,l,d]=await Promise.all([
       supabase.from("profiles").select("*").eq("id",user.id).single(),
       supabase.from("shipments").select("*").order("scheduled_at"),
