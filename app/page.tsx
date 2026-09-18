@@ -67,7 +67,7 @@ export default function Home() {
       await reload();
     }
     bootstrap();
-    const {data:auth}=supabase.auth.onAuthStateChange((_event: unknown,session: any)=>{ if(!session){setProfile(null);setLoading(false);} else void reload(); });
+    const {data:auth}=supabase.auth.onAuthStateChange((_event: unknown,session: any)=>{ if(!session){setProfile({id:"public",name:"Operação",role:"admin",active:true});setLoading(false);} else void reload(); });
     const channel=supabase.channel("nexo-operation")
       .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
@@ -136,7 +136,7 @@ export default function Home() {
     return()=>abort.abort();
   },[loads]);
 
-  if(!demo&&!profile&&!loading)return <Login login={login} setLogin={setLogin} submit={signIn} message={message}/>;
+  
   if(loading)return <div className="loading"><Activity className="spin"/> Sincronizando operação…</div>;
   return <main className={`shell ${tv?"tv":""}`}>
     <div className="ambient-grid" aria-hidden="true"><i/><i/><i/></div>
