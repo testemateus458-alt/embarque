@@ -48,7 +48,7 @@ export default function Home() {
   const [loading,setLoading] = useState(!demo);
   const [now,setNow] = useState(0);
   const [demoReady,setDemoReady] = useState(false);
-  const [demoUnlocked,setDemoUnlocked] = useState(true);
+  const [demoUnlocked,setDemoUnlocked] = useState(false);
   const [unlockOpen,setUnlockOpen] = useState(false);
   const [demoPassword,setDemoPassword] = useState("");
   const [accessError,setAccessError] = useState("");
@@ -56,7 +56,7 @@ export default function Home() {
 
   useEffect(()=>{ setNow(Date.now()); const timer=setInterval(()=>setNow(Date.now()),1000); return()=>clearInterval(timer); },[]);
   useEffect(()=>{if(!demo)return;try{const saved=localStorage.getItem("packem-shipments");if(saved)setLoads(JSON.parse(saved) as Shipment[])}catch{}finally{setDemoReady(true)}},[demo]);
-  useEffect(()=>{if(demo&&sessionStorage.getItem("packem-demo-access")==="ok")setDemoUnlocked(true)},[demo]);
+  
   useEffect(()=>{if(demo&&demoReady)localStorage.setItem("packem-shipments",JSON.stringify(loads))},[demo,demoReady,loads]);
   useEffect(()=>{
     if(!supabase) return;
@@ -123,7 +123,7 @@ export default function Home() {
   function openStage(stage:string){setQuery("");setStageFilter(stage);setPage(1);window.setTimeout(()=>document.querySelector('.operation-grid')?.scrollIntoView({behavior:'smooth',block:'start'}),0)}
   async function removeLoad(){if(!confirmDelete||profile?.role!=="admin")return;if(demo){setLoads(v=>v.filter(x=>x.id!==confirmDelete.id));setConfirmDelete(null);return}const {error}=await supabase!.from("shipments").delete().eq("id",confirmDelete.id);if(error)setMessage(error.message);else{setConfirmDelete(null);await reload()}}
   async function signIn(e:FormEvent){e.preventDefault();setLoading(true);const {error}=await supabase!.auth.signInWithPassword(login);setMessage(error?"E-mail ou senha inválidos.":"");setLoading(false)}
-  function unlockDemo(event:FormEvent){event.preventDefault();if(demoPassword!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}sessionStorage.setItem("packem-demo-access","ok");setAccessError("");setDemoUnlocked(true)}
+  function unlockDemo(event:FormEvent){event.preventDefault();if(demoPassword!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}setAccessError("");setDemoUnlocked(true)}
   async function setUserRole(user:Profile,role:Role){if(demo){setProfiles(v=>v.map(p=>p.id===user.id?{...p,role}:p));return}const {error}=await supabase!.from("profiles").update({role}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
   async function toggleUser(user:Profile){if(!supabase)return;const {error}=await supabase.from("profiles").update({active:!user.active}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
   async function readPdf(file?:File){if(!file)return;setImporting(true);setMessage("");try{setImportRows(await parseShipmentPdf(file))}catch(error){setMessage((error as Error).message)}finally{setImporting(false)}}
