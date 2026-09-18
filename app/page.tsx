@@ -72,7 +72,7 @@ export default function Home() {
       .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
       .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},()=>void reload()).subscribe(status=>setConnection(status==='SUBSCRIBED'?'Conectado': 'Reconectando'));
-    const refresh=setInterval(()=>void reload(),5000);
+    const refresh=setInterval(()=>void reload(),2000);
     return()=>{active=false;clearInterval(refresh);auth.subscription.unsubscribe();void supabase!.removeChannel(channel)};
   },[]);
 
