@@ -1,0 +1,5 @@
+/* Final layout guards: keep action controls aligned across screen sizes. */
+.request-grid .load .card-actions .action-main { display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; }
+.request-grid .load .card-actions .action-main svg { display: block !important; flex: 0 0 auto; }
+.request-grid .load .card-actions { align-items: center; }
+@media (max-width: 900px) { .shell > header { position: static; } .request-grid .load .card-actions { width: 100%; } }
