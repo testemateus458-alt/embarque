@@ -3,3 +3,19 @@
 .request-grid .load .card-actions .action-main svg { display: block !important; flex: 0 0 auto; }
 .request-grid .load .card-actions { align-items: center; }
 @media (max-width: 900px) { .shell > header { position: static; } .request-grid .load .card-actions { width: 100%; } }
+
+/* Empty filters should stay inside the dark operational surface. */
+.empty-state {
+  min-height: 290px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  background: linear-gradient(132deg, #212328, #17191d) !important;
+  border: 1px dashed rgba(255,255,255,.18) !important;
+  border-radius: 12px;
+  color: #d7dce3 !important;
+}
+.empty-state svg { color: #ff641f !important; }
+.empty-state h3 { color: #f5f7fa !important; }
+.empty-state p { color: #aab4c3 !important; }
