@@ -45,3 +45,19 @@
   .request-tabs button{min-width:112px!important;scroll-snap-align:start!important}
   .section-title{padding:14px 16px!important}
 }
+
+/* Lot details use the same graphite surface as the operation board. */
+.simple-details{
+  background:linear-gradient(145deg,#25282d,#1b1d21)!important;
+  border-color:#44484f!important;
+  color:#f4f1ec!important;
+  box-shadow:0 28px 70px rgba(0,0,0,.48)!important;
+}
+.simple-details .modal-title{border-bottom-color:#3c4047!important}
+.simple-details .modal-title small{color:#ff8b57!important}
+.simple-details .modal-title h2{color:#f7f4ef!important}
+.simple-details .modal-title>button{color:#c9c6bf!important;background:#30343a!important;border:1px solid #4a4f57!important;border-radius:7px!important}
+.simple-details dl{background:#454950!important;border-color:#454950!important}
+.simple-details dl div{background:#202227!important}
+.simple-details dt{color:#b7b4ac!important}
+.simple-details dd{color:#f5f2ec!important}
