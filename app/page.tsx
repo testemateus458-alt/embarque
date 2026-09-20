@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react"; import { createClient } from "@supabase/supabase-js";
 import {
-  Activity, AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Clock,
+  Activity, AlertTriangle, ArrowLeft, ArrowUpRight, Clock,
   History, LogOut, Monitor, Package, Plus, Search, Settings2,
   ShieldCheck, Trash2, Truck, Upload, Users, X
 } from "lucide-react";
@@ -211,6 +211,7 @@ function DemoAccess({password,setPassword,submit,error}:{password:string;setPass
 function DemoUnlock({password,setPassword,submit,onClose,error}:{password:string;setPassword:(value:string)=>void;submit:(event:FormEvent)=>void;onClose:()=>void;error:string}){return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><form className="modal unlock-modal" onSubmit={submit}><div className="modal-title"><div><small>CONTROLE DE ALTERAÇÕES</small><h2>Liberar operação</h2></div><button type="button" onClick={onClose}><X/></button></div><p>Digite a senha para movimentar os lotes e registrar falta de item.</p>{error&&<div className="access-error">{error}</div>}<label>Senha<input autoFocus type="password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="Digite a senha" required/></label><footer><button type="button" onClick={onClose}>Cancelar</button><button className="primary" type="submit">Liberar alterações</button></footer></form></div>}
 
 function Login({login,setLogin,submit,message}:{login:{email:string;password:string};setLogin:(v:{email:string;password:string})=>void;submit:(e:FormEvent)=>void;message:string}){return <main className="login-page"><section className="login-art"><div className="brand"><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></div><div><p>CENTRAL LOGÍSTICA</p><h1>Operação visível.<br/><span>Decisões mais rápidas.</span></h1><p>Acompanhe cargas, docas e atrasos em tempo real.</p></div></section><form className="login-card" onSubmit={submit}><small>ACESSO À OPERAÇÃO</small><h2>Bem-vindo de volta</h2><p>Entre com seu usuário autorizado.</p>{message&&<div className="warning">{message}</div>}<label>E-mail<input type="email" required value={login.email} onChange={e=>setLogin({...login,email:e.target.value})}/></label><label>Senha<input type="password" required value={login.password} onChange={e=>setLogin({...login,password:e.target.value})}/></label><button className="primary" type="submit">Entrar no painel</button><p className="login-note"><ShieldCheck size={15}/> Acesso controlado por perfil</p></form></main>}
+
 
 
 
