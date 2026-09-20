@@ -946,3 +946,23 @@ body,.shell{
 .simple-details dl{grid-template-columns:1fr 1fr!important;background:#36393f!important;border-color:#36393f!important}
 .simple-details dl div{background:#1b1d21!important}
 .simple-details dt{color:#a5a198!important}.simple-details dd{color:#f1ede6!important}
+
+/* Keep editable cards compact: deadline is a third column and actions follow the content. */
+.request-grid{align-items:start!important}
+.request-grid>.load{align-self:start!important}
+@media(min-width:701px){
+  .request-grid>.load .load-import-data{
+    grid-template-columns:112px 120px minmax(0,1fr)!important;
+    max-width:none!important;
+  }
+  .request-grid>.load .load-import-data span{
+    min-height:44px!important;
+  }
+  .request-grid>.load .card-actions{
+    align-self:start!important;
+  }
+}
+@media(max-width:700px){
+  .request-grid>.load .load-import-data{grid-template-columns:1fr 1fr!important;max-width:none!important}
+  .request-grid>.load .load-import-data span:last-child{grid-column:1/-1!important}
+}
