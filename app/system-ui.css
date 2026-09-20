@@ -966,3 +966,10 @@ body,.shell{
   .request-grid>.load .load-import-data{grid-template-columns:1fr 1fr!important;max-width:none!important}
   .request-grid>.load .load-import-data span:last-child{grid-column:1/-1!important}
 }
+
+/* Editable cards have one clear action; photos stay inside the lot details. */
+.request-grid>.load .photo-preview{display:none!important}
+.request-grid>.load .card-actions{display:flex!important;justify-content:flex-start!important}
+.request-grid>.load .card-actions .action-main{width:auto!important;min-width:104px!important}
+.photo-detail-action{position:relative;display:inline-flex!important;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
+.photo-detail-action input{position:absolute;inset:0;opacity:0;cursor:pointer}
