@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react"; import { createClient } from "@supabase/supabase-js";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react"; import { createClient } from "@supabase/supabase-js";
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowUpRight, Clock,
   History, LogOut, Monitor, Package, Plus, Search, Settings2,
@@ -59,7 +59,7 @@ export default function Home() {
 
   useEffect(()=>{ setNow(Date.now()); const timer=setInterval(()=>setNow(Date.now()),1000); return()=>clearInterval(timer); },[]);
   useEffect(()=>{if(!demo)return;try{const saved=localStorage.getItem("packem-shipments");if(saved)setLoads(JSON.parse(saved) as Shipment[])}catch{}finally{setDemoReady(true)}},[demo]);
-  
+
   useEffect(()=>{if(demo&&demoReady)localStorage.setItem("packem-shipments",JSON.stringify(loads))},[demo,demoReady,loads]);useEffect(()=>{if(!demo&&profile?.id==="public")void reload()},[demo,profile]);
   useEffect(()=>{
     if(!supabase) return;
@@ -105,14 +105,24 @@ export default function Home() {
   const currentPage=Math.min(page,pageCount);
   const queue=[...filtered].filter(l=>l.status!=="Concluído").sort((a,b)=>Date.parse(a.scheduled_at)-Date.parse(b.scheduled_at)).slice(0,5);
 
-  async function saveLoad(event:FormEvent<HTMLFormElement>){
+  async function saveLoad(event:FormEvent<HTMLFormElement>,stagedPhoto?:File){
     event.preventDefault(); if(!modal||!canWrite)return;
     const candidate={...modal,destination:modal.carrier,volumes:0,weight:0,dock_id:null,scheduled_at:new Date(modal.scheduled_at).toISOString()} as Shipment;
     if(loads.some(x=>x.id!==candidate.id&&x.number.trim().toLowerCase()===candidate.number.trim().toLowerCase())){setMessage('Já existe uma requisição com este lote. Edite o registro existente.');return;}
     try{validateShipment(candidate);assertDockAvailable(candidate,loads)}catch(error){setMessage((error as Error).message);return}
     if(demo){
-      if(candidate.id){setLoads(v=>v.map(x=>x.id===candidate.id?{...x,...candidate,version:x.version+1,updated_at:new Date().toISOString()}:x));setAudits(v=>[{id:Date.now(),shipment_id:candidate.id!,shipment_number:candidate.number,action:"UPDATE",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:loads.find(x=>x.id===candidate.id)||null,after_data:candidate},...v])}
-      else{const created={...candidate,id:crypto.randomUUID(),version:1,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};setLoads(v=>[...v,created]);setAudits(v=>[{id:Date.now(),shipment_id:created.id,shipment_number:created.number,action:"INSERT",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:null,after_data:created},...v])}
+      let saved:Shipment;
+      if(candidate.id){
+        const previous=loads.find(x=>x.id===candidate.id);
+        saved={...candidate,version:(previous?.version||candidate.version||0)+1,updated_at:new Date().toISOString()};
+        setLoads(v=>v.map(x=>x.id===candidate.id?{...x,...saved}:x));
+        setAudits(v=>[{id:Date.now(),shipment_id:candidate.id!,shipment_number:candidate.number,action:"UPDATE",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:previous||null,after_data:saved},...v]);
+      }else{
+        saved={...candidate,id:crypto.randomUUID(),version:1,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+        setLoads(v=>[...v,saved]);
+        setAudits(v=>[{id:Date.now(),shipment_id:saved.id,shipment_number:saved.number,action:"INSERT",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:null,after_data:saved},...v]);
+      }
+      if(stagedPhoto)await uploadLoadPhoto(saved,stagedPhoto);
       setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);return;
     }
     const payload={...candidate};delete (payload as Partial<Shipment>).id;delete (payload as Partial<Shipment>).version;
@@ -121,6 +131,7 @@ export default function Home() {
       : await supabase!.from("shipments").insert(payload).select().single();
     if(result.error){setMessage(result.error.code==="23505"?"Número ou doca já está em uso.":result.error.message);return}
     if(candidate.id&&!result.data){setMessage("A carga foi alterada por outra pessoa. Atualizamos os dados; revise antes de salvar novamente.");await reload();return}
+    if(stagedPhoto&&result.data)await uploadLoadPhoto(result.data as Shipment,stagedPhoto);
     setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);await reload();
   }
   async function uploadLoadPhoto(load:Shipment,file?:File){
@@ -128,7 +139,7 @@ export default function Home() {
     if(!file.type.startsWith("image/")){setMessage("Escolha uma imagem JPG, PNG ou WEBP.");return;}
     if(file.size>5*1024*1024){setMessage("A foto deve ter no máximo 5 MB.");return;}
     try{
-      if(demo){const url=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error("Não foi possível ler a foto."));reader.readAsDataURL(file)});setLoads(current=>current.map(item=>item.id===load.id?{...item,photo_url:url,updated_at:new Date().toISOString()}:item));setMessage(`Foto adicionada ao lote ${load.number}.`);return;}
+      if(demo){const url=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error("Não foi possível ler a foto."));reader.readAsDataURL(file)});const photo={id:crypto.randomUUID(),shipment_id:load.id,url,created_at:new Date().toISOString()};setPhotos(current=>[photo,...current]);setLoads(current=>current.map(item=>item.id===load.id?{...item,photo_url:url,updated_at:new Date().toISOString()}:item));setMessage(`Foto adicionada ao lote ${load.number}.`);return;}
       const extension=(file.name.split(".").pop()||"jpg").toLowerCase();
       const path=`${load.id}/${Date.now()}.${extension}`;
       const {error:uploadError}=await supabase!.storage.from("carga-fotos").upload(path,file,{upsert:false,contentType:file.type});
@@ -157,7 +168,7 @@ export default function Home() {
     return()=>abort.abort();
   },[loads]);
 
-  
+
   if(loading)return <div className="loading"><Activity className="spin"/> Sincronizando operação…</div>;
   return <main className={`shell ${tv?"tv":""}`}>
     <div className="ambient-grid" aria-hidden="true"><i/><i/><i/></div>
@@ -176,13 +187,13 @@ export default function Home() {
     </>}
     {view==="board"&&pageCount>1&&<div className="pager"><button disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>Anterior</button><span>{currentPage} / {pageCount}</span><button disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}>Próxima</button></div>}
     {view==="dashboard"&&<OperationDashboard loads={loads} onExplore={(unit,status)=>{setQuery(unit);setStageFilter(status);setView("board");setPage(1);}}/>}
-    {view==="history"&&<HistoryView audits={audits} loads={loads}/>} 
-    {view==="team"&&profile?.role==="admin"&&<TeamView profiles={profiles} current={profile} onRole={setUserRole} onToggle={toggleUser} demo={demo}/>} 
-    {modal&&<LoadModal value={modal} docks={docks} loads={loads} onChange={setModal} onClose={()=>setModal(null)} onPhoto={canWrite?uploadLoadPhoto:undefined} onSubmit={saveLoad}/>} 
-    {details&&<Details load={details} late={isLate(details,now)} photos={photos.filter(photo=>photo.shipment_id===details.id)} audits={audits.filter(audit=>audit.shipment_id===details.id)} onClose={()=>setDetails(null)} onEdit={canWrite?()=>{setModal({...details,scheduled_at:details.scheduled_at.slice(0,16)});setDetails(null)}:undefined}/>} 
+    {view==="history"&&<HistoryView audits={audits} loads={loads}/>}
+    {view==="team"&&profile?.role==="admin"&&<TeamView profiles={profiles} current={profile} onRole={setUserRole} onToggle={toggleUser} demo={demo}/>}
+    {modal&&<LoadModal value={modal} onChange={setModal} onClose={()=>setModal(null)} onSubmit={saveLoad}/>}
+    {details&&<Details load={details} late={isLate(details,now)} photos={photos.filter(photo=>photo.shipment_id===details.id)} audits={audits.filter(audit=>audit.shipment_id===details.id)} onClose={()=>setDetails(null)} onEdit={canWrite?()=>{setModal({...details,scheduled_at:details.scheduled_at.slice(0,16)});setDetails(null)}:undefined}/>}
     {photoViewer&&<PhotoViewer load={photoViewer} photos={photos.filter(photo=>photo.shipment_id===photoViewer.id)} onClose={()=>setPhotoViewer(null)}/>}
-    {confirmDelete&&<Confirm number={confirmDelete.number} onClose={()=>setConfirmDelete(null)} onConfirm={removeLoad}/>} 
-    {importRows&&<PdfImportPreview rows={importRows} existing={new Set(loads.map(load=>load.number.trim().toLocaleLowerCase("pt-BR")))} onClose={()=>setImportRows(null)} onConfirm={confirmPdfImport}/>} 
+    {confirmDelete&&<Confirm number={confirmDelete.number} onClose={()=>setConfirmDelete(null)} onConfirm={removeLoad}/>}
+    {importRows&&<PdfImportPreview rows={importRows} existing={new Set(loads.map(load=>load.number.trim().toLocaleLowerCase("pt-BR")))} onClose={()=>setImportRows(null)} onConfirm={confirmPdfImport}/>}
   </main>;
 }
 
@@ -198,7 +209,20 @@ function LoadCard({load,canWrite,isAdmin,onOpen,onEdit,onMove,onDelete,onPhotoVi
  </article>
 }
 
-function LoadModal({value,onChange,onClose,onPhoto,onSubmit}:{value:FormLoad;docks:Dock[];loads:Shipment[];onChange:(v:FormLoad)=>void;onClose:()=>void;onPhoto?:(load:Shipment,file?:File)=>void;onSubmit:(e:FormEvent<HTMLFormElement>)=>void}){const field=(key:keyof FormLoad,val:unknown)=>onChange({...value,[key]:val});return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal load-form simple-form" onSubmit={onSubmit}><div className="modal-title"><div><small>REQUISIÇÃO</small><h2>{value.id?`Editar lote ${value.number}`:"Nova requisição"}</h2></div><button type="button" onClick={onClose}><X/></button></div><div className="form-grid"><label>Lote<input autoFocus required placeholder="Ex.: 107.06" value={value.number} onChange={e=>field("number",e.target.value)}/></label><label>Qual unidade?<input required placeholder="Ex.: Petrolândia" value={value.carrier} onChange={e=>field("carrier",e.target.value)}/></label><label>Responsável<input placeholder="Nome do responsável" value={value.responsible} onChange={e=>field("responsible",e.target.value)}/></label><label>Motorista<input placeholder="Nome do motorista" value={value.driver} onChange={e=>field("driver",e.target.value)}/></label><label>Placa<input placeholder="ABC1D23" value={value.plate} onChange={e=>field("plate",e.target.value)}/></label><label className="wide">Observações<textarea rows={3} placeholder="Informações da carga" value={value.notes} onChange={e=>field("notes",e.target.value)}/></label>{value.id&&onPhoto&&<label className="wide">Adicionar foto da carga<input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>{void onPhoto(value as Shipment,event.target.files?.[0]);event.currentTarget.value=""}}/></label>}<label className="wide">Situação<select value={value.status} onChange={e=>field("status",e.target.value)}>{STAGES.map(s=><option key={s}>{s}</option>)}</select></label>{value.status==="Falta item"&&<label className="wide missing-field">Observação do item que falta *<textarea required rows={4} placeholder="Informe o nome, código e quantidade do item faltante" value={value.missing_item_notes} onChange={e=>field("missing_item_notes",e.target.value)} /></label>}</div><footer><button type="button" onClick={onClose}>Cancelar</button><button className="primary" type="submit">Salvar requisição</button></footer></form></div>}
+function LoadModal({value,onChange,onClose,onSubmit}:{value:FormLoad;onChange:(v:FormLoad)=>void;onClose:()=>void;onSubmit:(e:FormEvent<HTMLFormElement>,photo?:File)=>void}){
+  const [selectedPhoto,setSelectedPhoto]=useState<File|null>(null);
+  const [preview,setPreview]=useState("");
+  const field=(key:keyof FormLoad,val:unknown)=>onChange({...value,[key]:val});
+  function choosePhoto(event:ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0]||null;
+    setSelectedPhoto(file);
+    if(!file){setPreview("");return}
+    const reader=new FileReader();
+    reader.onload=()=>setPreview(String(reader.result||""));
+    reader.readAsDataURL(file);
+  }
+  return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal load-form simple-form" onSubmit={event=>onSubmit(event,selectedPhoto||undefined)}><div className="modal-title"><div><small>REQUISIÇÃO</small><h2>{value.id?`Editar lote ${value.number}`:"Nova requisição"}</h2></div><button type="button" onClick={onClose}><X/></button></div><div className="form-grid"><label>Lote<input autoFocus required placeholder="Ex.: 107.06" value={value.number} onChange={e=>field("number",e.target.value)}/></label><label>Qual unidade?<input required placeholder="Ex.: Petrolândia" value={value.carrier} onChange={e=>field("carrier",e.target.value)}/></label><label>Responsável<input placeholder="Nome do responsável" value={value.responsible} onChange={e=>field("responsible",e.target.value)}/></label><label>Motorista<input placeholder="Nome do motorista" value={value.driver} onChange={e=>field("driver",e.target.value)}/></label><label>Placa<input placeholder="ABC1D23" value={value.plate} onChange={e=>field("plate",e.target.value)}/></label><label className="wide">Observações<textarea rows={3} placeholder="Informações da carga" value={value.notes} onChange={e=>field("notes",e.target.value)}/></label><label className="wide photo-input">Adicionar foto da carga<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto}/>{preview&&<figure className="photo-draft"><img src={preview} alt="Prévia da foto da carga"/><figcaption>Foto selecionada. Ela será enviada ao clicar em Salvar requisição.</figcaption></figure>}</label><label className="wide">Situação<select value={value.status} onChange={e=>field("status",e.target.value)}>{STAGES.map(s=><option key={s}>{s}</option>)}</select></label>{value.status==="Falta item"&&<label className="wide missing-field">Observação do item que falta *<textarea required rows={4} placeholder="Informe o nome, código e quantidade do item faltante" value={value.missing_item_notes} onChange={e=>field("missing_item_notes",e.target.value)}/></label>}</div><footer><button type="button" onClick={onClose}>Cancelar</button><button className="primary" type="submit">Salvar requisição</button></footer></form></div>
+}
 
 function Details({load,onClose,onEdit,photos,audits}:{load:Shipment;late:boolean;onClose:()=>void;onEdit?:()=>void;photos:ShipmentPhoto[];audits:Audit[]}){return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><section className="modal details simple-details"><div className="modal-title"><div><small>LOTE</small><h2>{load.number}</h2></div><button onClick={onClose}><X/></button></div><dl><div><dt>Unidade</dt><dd>{load.carrier==="Não informado"?"—":load.carrier||"—"}</dd></div><div><dt>Situação</dt><dd>{load.status}</dd></div><div><dt>Responsável</dt><dd>{load.responsible||"—"}</dd></div><div><dt>Motorista</dt><dd>{load.driver||"—"}</dd></div><div><dt>Placa</dt><dd>{load.plate||"—"}</dd></div><div><dt>Prazo</dt><dd>{new Date(load.scheduled_at).toLocaleString("pt-BR")}</dd></div>{load.notes&&<div className="wide"><dt>Observações</dt><dd>{load.notes}</dd></div>}</dl>{photos.length>0&&<section className="photo-gallery"><h3>Fotos da carga</h3><div>{photos.map(photo=><figure key={photo.id}><img src={photo.url} alt={`Foto da carga do lote ${load.number}`}/><figcaption>{new Date(photo.created_at).toLocaleString("pt-BR")}</figcaption></figure>)}</div></section>}<section className="lot-history"><h3>Movimentações</h3>{audits.length?audits.slice(0,6).map(item=><p key={item.id}><b>{item.action==="INSERT"?"Criado":"Atualizado"}</b> · {new Date(item.created_at).toLocaleString("pt-BR")}</p>):<p>Nenhuma movimentação registrada.</p>}</section><footer>{onEdit&&<button className="primary" onClick={onEdit}>Editar requisição</button>}</footer></section></div>}
 
