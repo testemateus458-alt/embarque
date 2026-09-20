@@ -1019,3 +1019,4 @@ body,.shell{
 @media(max-width:700px){
   .request-grid>.load .card-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
+@media(min-width:701px){.request-grid>.load .card-actions{grid-template-columns:repeat(auto-fit,minmax(70px,1fr))!important}}
