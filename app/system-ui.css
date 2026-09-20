@@ -1034,3 +1034,5 @@ body,.shell{
 .load-form .photo-drafts small{display:block;color:#52616c;font-size:12px}
 .request-grid>.load .card-actions{position:relative;z-index:6!important}
 @media(max-width:700px){.load-form .photo-drafts figure,.load-form .photo-drafts img{width:96px}.load-form .photo-drafts img{height:78px}}
+
+/* Atualização de publicação: carregamento renovado. */
