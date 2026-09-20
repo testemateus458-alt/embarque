@@ -985,3 +985,37 @@ body,.shell{
 .request-grid>.load .photo-preview.card-photo{display:block!important;position:relative!important;right:auto!important;bottom:auto!important;flex:0 0 52px!important;width:52px!important;height:36px!important;margin:0!important;border-radius:6px!important;z-index:auto!important}
 .request-grid>.load .photo-preview.card-photo img{width:100%!important;height:100%!important;object-fit:cover!important}
 .request-grid>.load .photo-preview.card-photo b{position:absolute!important;right:1px!important;bottom:1px!important;width:16px!important;height:16px!important;font-size:9px!important;padding:0!important}
+
+/* One consistent control bar for editors. */
+.request-grid>.load .card-actions{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  align-items:stretch!important;
+  justify-content:stretch!important;
+  gap:8px!important;
+}
+.request-grid>.load .card-actions .primary,
+.request-grid>.load .card-actions .action-main,
+.request-grid>.load .card-actions .danger-action{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-width:0!important;
+  height:36px!important;
+  min-height:36px!important;
+  margin:0!important;
+  padding:0 8px!important;
+  background:#ff641f!important;
+  border-color:#ff641f!important;
+  border-radius:7px!important;
+  color:#fff!important;
+  font-size:12px!important;
+  font-weight:720!important;
+  white-space:nowrap!important;
+  box-shadow:none!important;
+}
+.request-grid>.load .photo-preview.card-photo{justify-self:center!important;align-self:center!important}
+@media(max-width:700px){
+  .request-grid>.load .card-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
