@@ -71,3 +71,8 @@
 }
 .pager button:hover:not(:disabled){background:#41464e!important;border-color:#ff641f!important}
 .pager button:disabled{background:#25282d!important;color:#888b91!important;border-color:#363a40!important;opacity:.65!important}
+
+/* Shipment status and the multi-photo gallery. */
+.load-import-data .due-alert{color:#ffb08d!important}.load-import-data .due-alert small{color:#ff8a58!important}
+.photo-preview b{position:absolute;right:2px;bottom:2px;display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:#ff641f;color:#fff;font-size:10px}
+.photo-gallery,.lot-history{margin-top:18px;border-top:1px solid #3c4047;padding-top:14px}.photo-gallery h3,.lot-history h3{font-size:14px;margin:0 0 10px;color:#f4f1ec}.photo-gallery>div{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}.photo-gallery figure{margin:0;background:#202227;border:1px solid #454950;border-radius:8px;overflow:hidden}.photo-gallery img{width:100%;height:100px;object-fit:cover;display:block}.photo-gallery figcaption,.lot-history p{display:block;margin:0;padding:7px 8px;color:#b7b4ac;font-size:11px}.lot-history p{padding:7px 0;border-bottom:1px solid #33373d}.lot-history p b{color:#f4f1ec}
