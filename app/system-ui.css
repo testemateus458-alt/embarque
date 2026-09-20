@@ -980,3 +980,8 @@ body,.shell{
 .request-grid>.load .card-actions .danger-action{background:#bd4528!important;border-color:#bd4528!important}
 .request-grid>.load .photo-action{position:relative!important;overflow:hidden!important;cursor:pointer!important}
 .request-grid>.load .photo-action input{position:absolute!important;inset:0!important;opacity:0!important;cursor:pointer!important}
+
+/* Photo thumbnail is part of the action row, never an overlay on the card. */
+.request-grid>.load .photo-preview.card-photo{display:block!important;position:relative!important;right:auto!important;bottom:auto!important;flex:0 0 52px!important;width:52px!important;height:36px!important;margin:0!important;border-radius:6px!important;z-index:auto!important}
+.request-grid>.load .photo-preview.card-photo img{width:100%!important;height:100%!important;object-fit:cover!important}
+.request-grid>.load .photo-preview.card-photo b{position:absolute!important;right:1px!important;bottom:1px!important;width:16px!important;height:16px!important;font-size:9px!important;padding:0!important}
