@@ -973,3 +973,10 @@ body,.shell{
 .request-grid>.load .card-actions .action-main{width:auto!important;min-width:104px!important}
 .photo-detail-action{position:relative;display:inline-flex!important;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
 .photo-detail-action input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* Edit mode: keep every action visible as compact orange text buttons. */
+.request-grid>.load .card-actions{flex-wrap:wrap!important;gap:8px!important}
+.request-grid>.load .card-actions .primary{width:auto!important;min-width:0!important;padding:0 12px!important;background:#ff641f!important;border-color:#ff641f!important;color:#fff!important}
+.request-grid>.load .card-actions .danger-action{background:#bd4528!important;border-color:#bd4528!important}
+.request-grid>.load .photo-action{position:relative!important;overflow:hidden!important;cursor:pointer!important}
+.request-grid>.load .photo-action input{position:absolute!important;inset:0!important;opacity:0!important;cursor:pointer!important}
