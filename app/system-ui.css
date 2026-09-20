@@ -1026,3 +1026,11 @@ body,.shell{
 .request-grid > .load .card-main{position:relative!important;z-index:2!important;pointer-events:auto!important}
 .request-grid > .load .photo-preview.card-photo{position:relative!important;z-index:5!important;pointer-events:auto!important;cursor:pointer!important}
 @media(max-width:700px){.load-form .photo-draft{align-items:flex-start;flex-direction:column}.load-form .photo-draft img{width:100%;height:150px}}
+.load-form .photo-drafts{margin-top:10px;padding:10px;border:1px solid #d6dee5;border-radius:8px;background:#f6f8fa}
+.load-form .photo-drafts>div{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.load-form .photo-drafts figure{width:118px;margin:0}
+.load-form .photo-drafts img{display:block;width:118px;height:88px;object-fit:cover;border:1px solid #cbd5df;border-radius:6px}
+.load-form .photo-drafts figcaption{overflow:hidden;margin-top:3px;color:#52616c;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.load-form .photo-drafts small{display:block;color:#52616c;font-size:12px}
+.request-grid>.load .card-actions{position:relative;z-index:6!important}
+@media(max-width:700px){.load-form .photo-drafts figure,.load-form .photo-drafts img{width:96px}.load-form .photo-drafts img{height:78px}}
