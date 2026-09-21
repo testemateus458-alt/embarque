@@ -1036,3 +1036,9 @@ body,.shell{
 @media(max-width:700px){.load-form .photo-drafts figure,.load-form .photo-drafts img{width:96px}.load-form .photo-drafts img{height:78px}}
 
 /* Atualização de publicação: carregamento renovado. */
+/* Foto do lote: miniatura legível e alinhada aos comandos. */
+.request-grid>.load .photo-preview.card-photo{flex:0 0 96px!important;width:96px!important;height:48px!important;border:1px solid #59636c!important;border-radius:7px!important;background:#202329!important;overflow:hidden!important}
+.request-grid>.load .photo-preview.card-photo img{width:100%!important;height:100%!important;object-fit:cover!important}
+.request-grid>.load .photo-preview.card-photo b{right:4px!important;bottom:4px!important;width:18px!important;height:18px!important;line-height:18px!important;font-size:10px!important;background:#ff641f!important;color:#fff!important;border-radius:999px!important}
+.request-grid>.load .card-actions:has(.card-photo){grid-template-columns:96px repeat(auto-fit,minmax(90px,1fr))!important}
+@media(max-width:700px){.request-grid>.load .photo-preview.card-photo{flex-basis:82px!important;width:82px!important;height:44px!important}.request-grid>.load .card-actions:has(.card-photo){grid-template-columns:82px minmax(0,1fr)!important}}
