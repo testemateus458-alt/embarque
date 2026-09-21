@@ -154,9 +154,10 @@ export default function Home() {
   async function removeLoadPhoto(photo:ShipmentPhoto){
     if(!canWrite)return;
     if(demo){setPhotos(current=>current.filter(item=>item.id!==photo.id));return;}
-    const {error}=await supabase!.from("shipment_photos").delete().eq("id",photo.id);
-    if(error){setMessage(error.message);return;}
+    const {data,error}=await supabase!.from("shipment_photos").delete().eq("id",photo.id).select("id");
+    if(error||!data?.length){setMessage(error?.message||"A foto não foi removida. Libere as alterações e tente novamente.");return;}
     setPhotos(current=>current.filter(item=>item.id!==photo.id));
+    await reload();
     setMessage("Foto removida da carga.");
   }
 
