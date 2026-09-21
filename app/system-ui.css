@@ -1057,3 +1057,9 @@ body,.shell{
 .image-lightbox p{margin:12px 0 0;color:#fff;font-size:13px}
 .image-lightbox .image-close{position:absolute;top:22px;right:26px;display:grid;width:42px;height:42px;place-items:center;border:1px solid #687279;border-radius:8px;background:#20272b;color:#fff;cursor:pointer}
 @media(max-width:700px){.photo-viewer .gallery-photo{width:116px}.photo-viewer .gallery-photo img{width:114px;height:90px}.image-lightbox{padding:18px}.image-lightbox .image-close{top:12px;right:12px}}
+.load-form .saved-photos{margin:2px 0;padding:10px;border:1px solid #d6dee5;border-radius:8px;background:#f6f8fa}
+.load-form .saved-photos>div{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.load-form .saved-photos figure{position:relative;width:118px;height:88px;margin:0;overflow:hidden;border:1px solid #cbd5df;border-radius:6px}
+.load-form .saved-photos img{display:block;width:100%;height:100%;object-fit:cover}
+.load-form .saved-photos button{position:absolute;top:5px;right:5px;display:grid;width:26px;height:26px;place-items:center;border:0;border-radius:5px;background:#b43f2b;color:#fff;cursor:pointer}
+.load-form .saved-photos small{display:block;color:#52616c;font-size:12px}
