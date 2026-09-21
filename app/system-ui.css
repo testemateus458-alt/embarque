@@ -1071,3 +1071,6 @@ body,.shell{
 .shell>header nav button svg,.shell>header>button:not(.brand) svg{display:block!important;flex:0 0 auto!important}
 .heading-actions .primary,.heading-actions .pdf-upload{display:inline-flex!important;flex-direction:row!important;align-items:center!important;justify-content:center!important;gap:8px!important}
 .heading-actions .primary svg,.heading-actions .pdf-upload svg{display:block!important;flex:0 0 auto!important}
+/* Card sem prazo: quantidade e situação ficam equilibradas. */
+.request-grid>.load .load-import-data{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+@media(max-width:700px){.request-grid>.load .load-import-data{grid-template-columns:1fr 1fr!important}.request-grid>.load .load-import-data span:last-child{grid-column:auto!important}}
