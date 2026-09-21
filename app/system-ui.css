@@ -1042,3 +1042,10 @@ body,.shell{
 .request-grid>.load .photo-preview.card-photo b{right:4px!important;bottom:4px!important;width:18px!important;height:18px!important;line-height:18px!important;font-size:10px!important;background:#ff641f!important;color:#fff!important;border-radius:999px!important}
 .request-grid>.load .card-actions:has(.card-photo){grid-template-columns:96px repeat(auto-fit,minmax(90px,1fr))!important}
 @media(max-width:700px){.request-grid>.load .photo-preview.card-photo{flex-basis:82px!important;width:82px!important;height:44px!important}.request-grid>.load .card-actions:has(.card-photo){grid-template-columns:82px minmax(0,1fr)!important}}
+/* Foto dentro do bloco de prazo, ao lado da situação. */
+.request-grid>.load .load-import-data span{position:relative!important}
+.request-grid>.load .load-import-data .status-photo{position:absolute!important;right:9px!important;top:50%!important;display:block!important;width:48px!important;height:34px!important;margin:0!important;padding:0!important;overflow:hidden!important;transform:translateY(-50%)!important;border:1px solid #59636c!important;border-radius:6px!important;background:#202329!important;cursor:pointer!important}
+.request-grid>.load .load-import-data .status-photo img{width:100%!important;height:100%!important;object-fit:cover!important}
+.request-grid>.load .load-import-data .status-photo i{position:absolute!important;right:2px!important;bottom:2px!important;display:grid!important;width:16px!important;height:16px!important;place-items:center!important;border-radius:999px!important;background:#ff641f!important;color:#fff!important;font-size:9px!important;font-style:normal!important;font-weight:800!important}
+.request-grid>.load .load-import-data span:has(.status-photo)>b{display:block!important;padding-right:55px!important}
+@media(max-width:700px){.request-grid>.load .load-import-data .status-photo{right:7px!important;width:44px!important;height:32px!important}.request-grid>.load .load-import-data span:has(.status-photo)>b{padding-right:48px!important}}
