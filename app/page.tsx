@@ -157,6 +157,12 @@ export default function Home() {
     const {data,error}=await supabase!.from("shipment_photos").delete().eq("id",photo.id).select("id");
     if(error||!data?.length){setMessage(error?.message||"A foto não foi removida. Libere as alterações e tente novamente.");return;}
     setPhotos(current=>current.filter(item=>item.id!==photo.id));
+    const publicPrefix="/storage/v1/object/public/carga-fotos/";
+    const pathIndex=photo.url.indexOf(publicPrefix);
+    if(pathIndex>=0){
+      const storagePath=decodeURIComponent(photo.url.slice(pathIndex+publicPrefix.length));
+      await supabase!.storage.from("carga-fotos").remove([storagePath]);
+    }
     await reload();
     setMessage("Foto removida da carga.");
   }
