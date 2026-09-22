@@ -1,7 +1,3 @@
 import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  typescript: { ignoreBuildErrors: true },
-};
-
+const nextConfig:NextConfig={devIndicators:false,outputFileTracingRoot:process.cwd()};
 export default nextConfig;

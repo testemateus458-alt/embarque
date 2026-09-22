@@ -67,11 +67,11 @@ export default function Home() {
       await reload();
     }
     bootstrap();
-    const {data:auth}=supabase.auth.onAuthStateChange((_event,session)=>{ if(!session){setProfile(null);setLoading(false);} else void reload(); });
+    const {data:auth}=supabase.auth.onAuthStateChange((_event:unknown,session:any)=>{ if(!session){setProfile(null);setLoading(false);} else void reload(); });
     const channel=supabase.channel("nexo-operation")
       .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
-      .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},()=>void reload()).subscribe(status=>setConnection(status==='SUBSCRIBED'?'Conectado': 'Reconectando'));
+      .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},()=>void reload()).subscribe((status:string)=>setConnection(status==='SUBSCRIBED'?'Conectado': 'Reconectando'));
     const refresh=setInterval(()=>void reload(),60000);
     return()=>{active=false;clearInterval(refresh);auth.subscription.unsubscribe();void supabase!.removeChannel(channel)};
   },[]);
