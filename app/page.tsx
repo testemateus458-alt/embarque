@@ -7,7 +7,7 @@ import {
   ShieldCheck, Trash2, Truck, Upload, Users, X
 } from "lucide-react";
 import {ShipmentWeek} from "@/components/shipment-week";
-import {dayKey,weekStart,addDays,scheduledTimestamp,shortDate,longDate} from "@/lib/shipment-calendar";
+import {dayKey,weekStart,addDays,scheduledTimestamp,shipmentDay,shortDate,longDate} from "@/lib/shipment-calendar";
 import previewDates from "@/lib/preview-dates.json";
 import previewSnapshot from "@/lib/preview-snapshot.json";
 import {PhotoViewer, PhotoGallery} from "@/components/gallery-viewer";
@@ -50,7 +50,7 @@ export default function Home() {
   const [allDates,setAllDates]=useState(false);
   function selectCalendar(week:string,day:string,all=false){setCalendarWeek(week);setCalendarDay(day);setAllDates(all);setPage(1)}
   function revealDate(value:string){const day=dayKey(value);if(day)selectCalendar(weekStart(day),day)}
-  const scheduledLoads=useMemo(()=>loads.filter(load=>{const day=dayKey(load.scheduled_at);return allDates|| (calendarDay?calendarDay==="undated"?!day:day===calendarDay:day>=calendarWeek&&day<addDays(calendarWeek,7))}),[loads,calendarWeek,calendarDay,allDates]);
+  const scheduledLoads=useMemo(()=>loads.filter(load=>{const day=shipmentDay(load);return allDates|| (calendarDay?calendarDay==="undated"?!day:day===calendarDay:day>=calendarWeek&&day<addDays(calendarWeek,7))}),[loads,calendarWeek,calendarDay,allDates]);
   const tabsRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{
     const tabs=tabsRef.current;if(!tabs)return;
@@ -147,13 +147,14 @@ export default function Home() {
 
   async function saveLoad(event:FormEvent<HTMLFormElement>,stagedPhotos:File[]=[]){
     event.preventDefault(); if(!modal||!canWrite)return;if(!dayKey(modal.scheduled_at)){setMessage("Informe a data do embarque.");return;}
-    const candidate={...modal,destination:modal.carrier,volumes:Number(modal.volumes)||0,weight:0,dock_id:null,scheduled_at:new Date(modal.scheduled_at).toISOString()} as Shipment;
+    const previous=modal.id?loads.find(load=>load.id===modal.id):undefined;
+    const completedNow=modal.status==="Concluído"&&previous?.status!=="Concluído";
+    const candidate={...modal,destination:modal.carrier,volumes:Number(modal.volumes)||0,weight:0,dock_id:null,scheduled_at:new Date(modal.scheduled_at).toISOString(),shipped_at:modal.status==="Concluído"?(completedNow||!modal.shipped_at?new Date().toISOString():modal.shipped_at):null} as Shipment;
     if(loads.some(x=>x.id!==candidate.id&&x.number.trim().toLowerCase()===candidate.number.trim().toLowerCase())){setMessage('Já existe uma requisição com este lote. Edite o registro existente.');return;}
     try{validateShipment(candidate);assertDockAvailable(candidate,loads)}catch(error){setMessage((error as Error).message);return}
     if(demo){
       let saved:Shipment;
       if(candidate.id){
-        const previous=loads.find(x=>x.id===candidate.id);
         saved={...candidate,version:(previous?.version||candidate.version||0)+1,updated_at:new Date().toISOString()};
         setLoads(v=>v.map(x=>x.id===candidate.id?{...x,...saved}:x));
         setAudits(v=>[{id:Date.now(),shipment_id:candidate.id!,shipment_number:candidate.number,action:"UPDATE",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:previous||null,after_data:saved},...v]);
@@ -163,7 +164,7 @@ export default function Home() {
         setAudits(v=>[{id:Date.now(),shipment_id:saved.id,shipment_number:saved.number,action:"INSERT",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:null,after_data:saved},...v]);
       }
       if(stagedPhotos.length)await Promise.all(stagedPhotos.map(photo=>uploadLoadPhoto(saved,photo)));
-      revealDate(candidate.scheduled_at);setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);return;
+      revealDate(shipmentDay(saved));setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);return;
     }
     const payload={...candidate};delete (payload as Partial<Shipment>).id;delete (payload as Partial<Shipment>).version;
     const result=candidate.id
@@ -172,7 +173,7 @@ export default function Home() {
     if(result.error){setMessage(result.error.code==="23505"?"Número ou doca já está em uso.":result.error.message);return}
     if(candidate.id&&!result.data){setMessage("A carga foi alterada por outra pessoa. Atualizamos os dados; revise antes de salvar novamente.");await reload();return}
     if(stagedPhotos.length&&result.data)await Promise.all(stagedPhotos.map(photo=>uploadLoadPhoto(result.data as Shipment,photo)));
-    revealDate(candidate.scheduled_at);setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);await reload();
+    revealDate(shipmentDay((result.data||candidate) as Shipment));setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);await reload();
   }
   async function uploadLoadPhoto(load:Shipment,file?:File){
     if(!file||!canWrite)return;
@@ -260,7 +261,7 @@ function LoadCard({load,canWrite,isAdmin,onOpen,onEdit,onMove,onDelete,onPhotoVi
  const done=load.status==='Concluído';
  return <article className={'load status-'+STAGES.indexOf(load.status)} onPointerMove={event=>{if(event.pointerType!=="mouse")return;const rect=event.currentTarget.getBoundingClientRect();event.currentTarget.style.setProperty("--pointer-x",`${event.clientX-rect.left}px`);event.currentTarget.style.setProperty("--pointer-y",`${event.clientY-rect.top}px`)}}>
  <button className="card-main" aria-label={`Abrir lote ${load.number}`} onClick={onOpen}><div><span className="lot-label"><i/> LOTE</span></div><b className="lot-number">{load.number}</b><h4>{load.carrier&&load.carrier!=='Não informado'?load.carrier:(load.notes||'Carga programada')}</h4></button>
- <div className="load-import-data"><span><small>Quantidade</small>{Number(load.volumes).toLocaleString('pt-BR')}<small className="shipment-schedule">{dayKey(load.scheduled_at)?`${shortDate(dayKey(load.scheduled_at))} · ${new Date(load.scheduled_at).toLocaleDateString("pt-BR",{weekday:"short",timeZone:"America/Sao_Paulo"})}`:"Data a definir"}</small></span><span className="cargo-progress"><small>Situação da carga</small><b>{load.status==='Concluído'?'Expedição finalizada':load.status==='Em processo'?'Carga em preparação':load.status==='Falta item'?'Aguardando itens':'Aguardando início'}</b>{photos[0]&&<button className="status-photo" title="Ver fotos da carga" aria-label={`Ver ${photos.length} fotos do lote ${load.number}`} onClick={onPhotoView}><img src={photos[0].url} alt={`Foto da carga do lote ${load.number}`}/><i>{photos.length}</i></button>}</span></div>
+ <div className="load-import-data"><span><small>Quantidade</small>{Number(load.volumes).toLocaleString('pt-BR')}<small className="shipment-schedule">{shipmentDay(load)?`${shortDate(shipmentDay(load))} · ${new Date(load.status==='Concluído'&&load.shipped_at?load.shipped_at:load.scheduled_at).toLocaleDateString("pt-BR",{weekday:"short",timeZone:"America/Sao_Paulo"})}`:"Data a definir"}</small></span><span className="cargo-progress"><small>Situação da carga</small><b>{load.status==='Concluído'?'Expedição finalizada':load.status==='Em processo'?'Carga em preparação':load.status==='Falta item'?'Aguardando itens':'Aguardando início'}</b>{photos[0]&&<button className="status-photo" title="Ver fotos da carga" aria-label={`Ver ${photos.length} fotos do lote ${load.number}`} onClick={onPhotoView}><img src={photos[0].url} alt={`Foto da carga do lote ${load.number}`}/><i>{photos.length}</i></button>}</span></div>
  <span className="row-status"><span className="status-chip">{load.status}</span></span>
  {canWrite&&<div className="card-actions">{canWrite&&!done&&<button className="primary action-main" onClick={()=>onMove(load,1)}>{load.status==='Pendente'?'Iniciar':load.status==='Falta item'?'Retomar':'Concluir'}</button>}{canWrite&&load.status==='Em processo'&&<button className="primary" onClick={()=>onMove(load,-1)}>Falta item</button>}{canWrite&&<button className="primary" onClick={onEdit}>Editar</button>}{isAdmin&&<button className="primary danger-action" onClick={onDelete}>Excluir</button>}</div>}
  </article>
