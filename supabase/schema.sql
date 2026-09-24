@@ -73,9 +73,11 @@ begin
  new.started_at := old.started_at;
  if new.status='Em processo' and (old.started_at is null or old.status='Concluído') then new.started_at:=now(); end if;
  if new.status='Pendente' then new.started_at:=null; end if;
- if new.status = 'Concluído' and old.status <> 'Concluído' then new.shipped_at := now();
- elsif new.status <> 'Concluído' then new.shipped_at := null;
- else new.shipped_at := old.shipped_at;
+ if new.status = 'Concluído' then
+  -- Respeita a data informada pelo operador e usa agora apenas como padrão.
+  new.shipped_at := coalesce(new.shipped_at, old.shipped_at, now());
+ else
+  new.shipped_at := null;
  end if;
  return new;
 end $$;
@@ -84,7 +86,7 @@ create function public.shipment_before_insert() returns trigger language plpgsql
 begin
  new.version:=1; new.created_at:=now(); new.updated_at:=now();
  new.started_at:=case when new.status='Em processo' then now() else null end;
- new.shipped_at:=case when new.status='Concluído' then now() else null end;
+ new.shipped_at:=case when new.status='Concluído' then coalesce(new.shipped_at,now()) else null end;
  return new;
 end $$;
 create trigger shipment_insert before insert on public.shipments for each row execute function public.shipment_before_insert();
