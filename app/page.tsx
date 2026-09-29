@@ -25,6 +25,7 @@ import { STAGES, assertDockAvailable, isLate, validateShipment } from "@/lib/dom
 
 import {OperationDashboard} from '@/components/operation-dashboard';
 import {parseShipmentPdf, type ImportedShipmentRow} from '@/lib/pdf-import';
+import {planShipmentImport, lotKey} from '@/lib/shipment-import';
 
 type Role = "visualizador" | "operador" | "admin";
 type FormLoad = Omit<Shipment, "id" | "version"> & { id?: string; version?: number };
@@ -214,8 +215,62 @@ export default function Home() {
   function unlockDemo(event:FormEvent){event.preventDefault();if(demoPassword!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}setAccessError("");setDemoUnlocked(true)}
   async function setUserRole(user:Profile,role:Role){if(demo){setProfiles(v=>v.map(p=>p.id===user.id?{...p,role}:p));return}const {error}=await supabase!.from("profiles").update({role}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
   async function toggleUser(user:Profile){if(!supabase)return;const {error}=await supabase.from("profiles").update({active:!user.active}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
-  async function readPdf(file?:File){if(!file)return;setImporting(true);setMessage("");try{setImportRows(await parseShipmentPdf(file))}catch(error){setMessage((error as Error).message)}finally{setImporting(false)}}
-  async function confirmPdfImport(){if(!importRows||!canWrite)return;const existing=new Set(loads.map(load=>load.number.trim().toLocaleLowerCase("pt-BR")));const fresh=importRows.filter(row=>!existing.has(row.lot.trim().toLocaleLowerCase("pt-BR"))).map(row=>({id:crypto.randomUUID(),number:row.lot,nf:"",destination:row.destination,carrier:row.destination,driver:"",plate:"",vehicle:"Kit",dock_id:null,scheduled_at:scheduledTimestamp(row.date),volumes:row.quantity,weight:0,responsible:profile?.name||"",notes:row.description,missing_item_notes:"",status:"Pendente",version:1,created_at:new Date().toISOString(),updated_at:new Date().toISOString()} satisfies Shipment));if(!fresh.length){setMessage("Todos os lotes desse PDF já estão cadastrados.");setImportRows(null);return}if(demo){setLoads(current=>[...fresh,...current]);setImportRows(null);selectCalendar(weekStart(dayKey(fresh[0].scheduled_at)),"");setStageFilter("Todos");setMessage(`${fresh.length} lotes importados do PDF.`);return}const payload=fresh.map(({id,version,created_at,updated_at,...row})=>row);let error:any=null;for(let i=0;i<payload.length;i+=5){try{const result=await supabase!.from("shipments").insert(payload.slice(i,i+5));error=result.error;if(error)break}catch{error={message:"Falha de conexão ao salvar os lotes. Tente novamente."};break}}if(error)setMessage(error.message);else{setImportRows(null);selectCalendar(weekStart(dayKey(fresh[0].scheduled_at)),"");setStageFilter("Todos");setMessage(`${fresh.length} lotes importados do PDF.`);await reload()}}
+  async function readPdf(file?:File){if(!file)return;setImporting(true);setMessage("");try{const rows=await parseShipmentPdf(file);planShipmentImport(rows,loads.map(load=>({id:load.id,number:load.number,date:dayKey(load.scheduled_at),version:load.version})));setImportRows(rows)}catch(error){setMessage((error as Error).message)}finally{setImporting(false)}}
+  async function confirmPdfImport() {
+    if (!importRows || !canWrite || importing) return;
+    setImporting(true);
+    let created = 0, corrected = 0;
+    try {
+      const plan = planShipmentImport(importRows, loads.map(load => ({ id: load.id, number: load.number, date: dayKey(load.scheduled_at), version: load.version })));
+      const fresh = plan.newRows.map(row => ({
+        id: crypto.randomUUID(), number: row.lot, nf: "", destination: row.destination, carrier: row.destination,
+        driver: "", plate: "", vehicle: "Kit", dock_id: null, scheduled_at: scheduledTimestamp(row.date),
+        volumes: row.quantity, weight: 0, responsible: profile?.name || "", notes: row.description,
+        missing_item_notes: "", status: "Pendente", version: 1,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      } satisfies Shipment));
+      if (!fresh.length && !plan.dateUpdates.length) {
+        setMessage("Todos os lotes desse PDF já estão cadastrados com a data prevista correta.");
+        setImportRows(null);
+        return;
+      }
+      if (demo) {
+        const updates = new Map(plan.dateUpdates.map(change => [change.id, change.row.date]));
+        setLoads(current => [...fresh, ...current.map(load => {
+          const date = updates.get(load.id);
+          return date ? { ...load, scheduled_at: scheduledTimestamp(date), version: load.version + 1, updated_at: new Date().toISOString() } : load;
+        })]);
+        created = fresh.length; corrected = plan.dateUpdates.length;
+      } else {
+        const payload = fresh.map(({ id, version, created_at, updated_at, ...row }) => row);
+        for (let i = 0; i < payload.length; i += 5) {
+          const batch = payload.slice(i, i + 5);
+          const { error } = await supabase!.from("shipments").insert(batch);
+          if (error) throw error;
+          created += batch.length;
+        }
+        for (const change of plan.dateUpdates) {
+          const { data, error } = await supabase!.from("shipments")
+            .update({ scheduled_at: scheduledTimestamp(change.row.date) })
+            .eq("id", change.id).eq("version", change.version).select("id");
+          if (error) throw error;
+          if (!data?.length) throw new Error(`O lote ${change.row.lot} foi alterado durante a importação. Confira a prévia e tente novamente.`);
+          corrected++;
+        }
+        await reload();
+      }
+      setImportRows(null);
+      selectCalendar(weekStart(importRows[0].date), "");
+      setStageFilter("Todos");
+      setMessage(`${created} lotes novos · ${corrected} datas previstas corrigidas.`);
+    } catch (error) {
+      if (!demo) { try { await reload(); } catch {} }
+      const reason = error instanceof Error ? error.message : (error as { message?: string })?.message || "Falha de conexão ao salvar os lotes.";
+      setMessage(`${reason}${created || corrected ? ` Já foram salvos: ${created} lotes novos e ${corrected} datas corrigidas. Reenvie o PDF para concluir.` : ""}`);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   useEffect(()=>{
     const context=(document as Document & {modelContext?:{registerTool:(tool:unknown,opts?:unknown)=>void}}).modelContext;
@@ -250,11 +305,39 @@ export default function Home() {
     {details&&<Details load={details} late={isLate(details,now)} photos={photos.filter(photo=>photo.shipment_id===details.id)} audits={audits.filter(audit=>audit.shipment_id===details.id)} onClose={()=>setDetails(null)} onEdit={canWrite?()=>{setModal({...details,scheduled_at:details.scheduled_at});setDetails(null)}:undefined}/>}
     {photoViewer&&<PhotoViewer load={photoViewer} photos={photos.filter(photo=>photo.shipment_id===photoViewer.id)} onClose={()=>setPhotoViewer(null)}/>}
     {confirmDelete&&<Confirm number={confirmDelete.number} onClose={()=>setConfirmDelete(null)} onConfirm={removeLoad}/>}
-    {importRows&&<PdfImportPreview rows={importRows} existing={new Set(loads.map(load=>load.number.trim().toLocaleLowerCase("pt-BR")))} onClose={()=>setImportRows(null)} onConfirm={confirmPdfImport}/>}
+    {importRows&&<PdfImportPreview rows={importRows} existing={loads} busy={importing} onClose={()=>{if(!importing)setImportRows(null)}} onConfirm={confirmPdfImport}/>}
   </main>;
 }
 
-function PdfImportPreview({rows,existing,onClose,onConfirm}:{rows:ImportedShipmentRow[];existing:Set<string>;onClose:()=>void;onConfirm:()=>void}){const newCount=rows.filter(row=>!existing.has(row.lot.trim().toLocaleLowerCase("pt-BR"))).length;return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><section className="modal pdf-preview"><div className="modal-title"><div><small>IMPORTAÇÃO DO PDF</small><h2>Conferir {rows.length} lotes encontrados</h2></div><button aria-label="Fechar janela" onClick={onClose}><X/></button></div><div className="pdf-table-wrap"><table><thead><tr><th>Data</th><th>Destino</th><th>Lote</th><th>Quantidade</th><th>Descrição</th></tr></thead><tbody>{rows.map((row,index)=>{const duplicate=existing.has(row.lot.trim().toLocaleLowerCase("pt-BR"));return <tr key={`${row.lot}-${index}`} className={duplicate?"duplicate":""}><td>{new Date(`${row.date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{row.destination}</td><td><b>{row.lot}</b>{duplicate&&<small>Já cadastrado</small>}</td><td>{row.quantity.toLocaleString("pt-BR")}</td><td>{row.description}</td></tr>})}</tbody></table></div><footer><span>{newCount} novos · {rows.length-newCount} duplicados</span><button onClick={onClose}>Cancelar</button><button className="primary" disabled={!newCount} onClick={onConfirm}>Importar {newCount} lotes</button></footer></section></div>}
+function PdfImportPreview({ rows, existing, busy, onClose, onConfirm }: { rows: ImportedShipmentRow[]; existing: Shipment[]; busy: boolean; onClose: () => void; onConfirm: () => void }) {
+  let plan: ReturnType<typeof planShipmentImport> = { newRows: [], dateUpdates: [], unchanged: [] };
+  let error = "";
+  try {
+    plan = planShipmentImport(rows, existing.map(load => ({ id: load.id, number: load.number, date: dayKey(load.scheduled_at), version: load.version })));
+  } catch (reason) { error = (reason as Error).message; }
+  const updates = new Map(plan.dateUpdates.map(change => [lotKey(change.row.lot), change]));
+  const unchanged = new Set(plan.unchanged.map(row => lotKey(row.lot)));
+  const count = plan.newRows.length + plan.dateUpdates.length;
+  return <div className="overlay" onMouseDown={event => !busy && event.target === event.currentTarget && onClose()}>
+    <section className="modal pdf-preview">
+      <div className="modal-title"><div><small>IMPORTAÇÃO DO PDF</small><h2>Conferir {rows.length} lotes encontrados</h2></div><button disabled={busy} aria-label="Fechar janela" onClick={onClose}><X/></button></div>
+      <p>Ao reenviar um romaneio, as datas previstas dos lotes existentes serão corrigidas. Situação, fotos e data de finalização serão preservadas.</p>
+      {error && <div className="access-error">{error}</div>}
+      <div className="pdf-table-wrap"><table>
+        <thead><tr><th>Data prevista</th><th>Destino</th><th>Lote</th><th>Quantidade</th><th>Descrição</th></tr></thead>
+        <tbody>{rows.map((row, index) => {
+          const update = updates.get(lotKey(row.lot)), same = unchanged.has(lotKey(row.lot));
+          return <tr key={`${row.lot}-${index}`} className={same ? "duplicate" : ""}>
+            <td>{longDate(row.date)}{update && <small>Antes: {update.previousDate ? shortDate(update.previousDate) : "sem data"}</small>}</td>
+            <td>{row.destination}</td><td><b>{row.lot}</b><small>{update ? "Corrigir data prevista" : same ? "Já cadastrado · data correta" : "Novo lote"}</small></td>
+            <td>{row.quantity.toLocaleString("pt-BR")}</td><td>{row.description}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+      <footer><span>{plan.newRows.length} novos · {plan.dateUpdates.length} datas a corrigir · {plan.unchanged.length} já corretos</span><button disabled={busy} onClick={onClose}>Cancelar</button><button className="primary" disabled={busy || !count || !!error} onClick={onConfirm}>{busy ? "Salvando…" : `Confirmar ${count} lotes`}</button></footer>
+    </section>
+  </div>;
+}
 
 function LoadCard({load,canWrite,isAdmin,onOpen,onEdit,onMove,onDelete,onPhotoView,photos}:{load:Shipment;canWrite:boolean;isAdmin:boolean;onOpen:()=>void;onEdit:()=>void;onMove:(l:Shipment,d:number)=>void;onDelete:()=>void;onPhotoView:()=>void;photos:ShipmentPhoto[]}){
  const done=load.status==='Concluído';
