@@ -1074,3 +1074,22 @@ body,.shell{
 /* Card sem prazo: quantidade e situação ficam equilibradas. */
 .request-grid>.load .load-import-data{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
 @media(max-width:700px){.request-grid>.load .load-import-data{grid-template-columns:1fr 1fr!important}.request-grid>.load .load-import-data span:last-child{grid-column:auto!important}}
+
+/* Missing-item notes stay visible for viewers without edit access. */
+.request-grid>.load .load-import-data .missing-item-alert{
+  grid-column:1/-1!important;
+  display:block!important;
+  min-height:0!important;
+  margin:6px 0 0!important;
+  padding:10px 12px!important;
+  border:1px solid #7b4a34!important;
+  border-radius:7px!important;
+  background:#2a2320!important;
+  color:#f3c5ae!important;
+  overflow-wrap:anywhere;
+}
+.request-grid>.load .missing-item-alert small{display:block!important;margin-bottom:4px!important;color:#ffad83!important;font-size:10px!important}
+.request-grid>.load .missing-item-alert b{display:block!important;color:#f3c5ae!important;font-size:13px!important;line-height:1.4!important;white-space:pre-wrap}
+.simple-details .missing-detail{border:1px solid #7b4a34!important;background:#2a2320!important}
+.simple-details .missing-detail dt{color:#ffad83!important}
+.simple-details .missing-detail dd{color:#f3c5ae!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important}
