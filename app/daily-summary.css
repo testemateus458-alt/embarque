@@ -1,0 +1,21 @@
+.original-polish .modal.daily-summary{width:min(1000px,100%)!important}
+.daily-summary-controls{display:flex;align-items:end;gap:18px;margin-bottom:16px}
+.daily-summary-controls label,.daily-summary-text-label{display:grid;gap:8px;font-size:13px;font-weight:700;color:#d6d8db}
+.daily-summary-controls input{min-height:42px;padding:8px 10px;border:1px solid #555a60;border-radius:8px;background:#191c20;color:#fff;color-scheme:dark}
+.daily-summary-controls p{margin:0 0 4px;color:#adb2b7;font-size:12px}
+.daily-summary-stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.daily-summary-stats>*{padding:8px 10px;border:1px solid #42464b;border-radius:7px;background:#2a2e33;font-size:12px;color:#e5e6e8}
+.daily-summary-stats strong{color:#fff}
+.daily-summary-table-wrap{overflow:auto;max-height:34vh;border:1px solid #44484e;border-radius:8px}
+.daily-summary table{width:100%;border-collapse:collapse;min-width:680px;font-size:12px}
+.daily-summary th,.daily-summary td{padding:10px 12px;text-align:left;border-bottom:1px solid #41454a;vertical-align:top}
+.daily-summary th{position:sticky;top:0;background:#34383e;color:#d5d7da;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.daily-summary tbody tr:nth-child(even){background:#2a2d32}
+.daily-summary-missing{color:#ffab83;font-weight:700}
+.daily-summary-text-label{margin-top:18px}
+.original-polish .modal.daily-summary .daily-summary-preview{display:block;width:100%;height:170px!important;min-height:170px!important;resize:vertical;padding:12px;border:1px solid #484d53;border-radius:8px;background:#171a1e;color:#e9ebed;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.daily-summary-feedback{margin:10px 0 0;color:#7ce2ad;font-size:12px}
+.original-polish .modal.daily-summary footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid #41454a}
+.original-polish .modal.daily-summary footer button,.daily-summary-whatsapp{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:10px 16px;border:1px solid #555a60;border-radius:8px;color:#f6f6f6;background:#34383e;text-decoration:none;font-size:12px;font-weight:700}
+.original-polish .modal.daily-summary footer .daily-summary-whatsapp{background:#14804a;border-color:#14804a;color:#fff}
+@media(max-width:620px){.daily-summary-controls{display:block}.daily-summary-controls p{margin-top:10px}.daily-summary-stats>*{flex:1 1 auto}.original-polish .modal.daily-summary footer>*{width:100%}}

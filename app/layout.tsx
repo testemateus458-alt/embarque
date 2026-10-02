@@ -10,6 +10,7 @@ import "./system-ui.css";
 import "./layout-fix.css";
 import "./original-polish.css";
 import "./refined-dialogs.css";
+import "./daily-summary.css";
 
 export const metadata: Metadata = {title:"Packem | Expedição — Teste local",description:"Central operacional de cargas, docas e embarques."};
 export default function RootLayout({children}:Readonly<{children:React.ReactNode}>){return <html lang="pt-BR"><body>{children}</body></html>}
