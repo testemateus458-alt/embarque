@@ -61,6 +61,14 @@ test('separate pages use their own printed dates, including skipped days',()=>{
   assert.deepEqual(rows.map(r=>r.date),['2026-09-28','2026-10-02','2026-10-02']);
 });
 
+test('unit split into multiple PDF text fragments stays attached to every lot in its merged cell',()=>{
+  const page=fixture([['28/09/26',2]]);
+  const original=page.items.find(item=>item.str==='UNIDADE 1');
+  page.items=page.items.filter(item=>item!==original);
+  page.items.push(text('AG',50,original.transform[5],9),text('TEXTIL',62,original.transform[5],25));
+  assert.deepEqual(parseShipmentPdfPages([page]).map(row=>row.destination),['AG TEXTIL','AG TEXTIL']);
+});
+
 test('missing dates reject import instead of assigning the heading week to every lot',()=>{
   const page=fixture([['28/09/26',2]]);
   page.items=page.items.filter(i=>!i.str.includes('dia de embarque'));
@@ -91,29 +99,42 @@ test('table borders honor PDF transforms and ignore colored cell backgrounds',()
 
 const row={date:'2026-09-30',destination:'UNIDADE 1',lot:'1.09/26',quantity:1000,description:'PRODUTO'};
 test('reimport corrects the existing date and adds only new lot numbers',()=>{
-  const existing=[{id:'saved',number:' 1.09/26 ',date:'2026-09-28',version:3,status:'Em processo',photo_url:'photo',started_at:'start'}];
+  const existing=[{id:'saved',number:' 1.09/26 ',date:'2026-09-28',version:3,carrier:'UNIDADE 1',destination:'UNIDADE 1',status:'Em processo',photo_url:'photo',started_at:'start'}];
   const before=structuredClone(existing);
   const plan=planShipmentImport([row,{...row,lot:'2.09/26'}],existing);
   assert.deepEqual(plan.newRows.map(r=>r.lot),['2.09/26']);
-  assert.deepEqual(plan.dateUpdates,[{id:'saved',version:3,previousDate:'2026-09-28',row}]);
+  assert.deepEqual(plan.updates,[{id:'saved',version:3,previousDate:'2026-09-28',previousUnit:'UNIDADE 1',dateChanged:true,unitChanged:false,row}]);
   assert.deepEqual(existing,before);
-  const updated={...existing[0],scheduled_at:scheduledTimestamp(plan.dateUpdates[0].row.date)};
+  const updated={...existing[0],scheduled_at:scheduledTimestamp(plan.updates[0].row.date)};
   assert.equal(updated.status,'Em processo');
   assert.equal(updated.photo_url,'photo');
   assert.equal(updated.started_at,'start');
 });
 
 test('a repeated import is a no-op and completed lots retain their actual calendar date',()=>{
-  const existing=[{id:'saved',number:row.lot,date:row.date,version:4}];
+  const existing=[{id:'saved',number:row.lot,date:row.date,version:4,carrier:row.destination,destination:row.destination}];
   const plan=planShipmentImport([row,row],existing);
   assert.equal(plan.unchanged.length,1);
   assert.equal(plan.newRows.length,0);
-  assert.equal(plan.dateUpdates.length,0);
+  assert.equal(plan.updates.length,0);
   const completed={scheduled_at:scheduledTimestamp(row.date),status:'Concluído',shipped_at:'2026-10-01T10:00:00-03:00'};
   assert.equal(shipmentDay(completed),'2026-10-01');
 });
 
+test('reimport repairs missing or incorrect units without changing the lot status',()=>{
+  const existing=[{id:'saved',number:row.lot,date:row.date,version:4,carrier:'Não informado',destination:'PETROLÂNDIA',status:'Falta item',missing_item_notes:'Saia',photo_url:'photo'}];
+  const plan=planShipmentImport([row],existing);
+  assert.equal(plan.newRows.length,0);
+  assert.equal(plan.updates.length,1);
+  assert.equal(plan.updates[0].unitChanged,true);
+  assert.equal(plan.updates[0].dateChanged,false);
+  assert.equal(plan.updates[0].row.destination,'UNIDADE 1');
+  assert.equal(existing[0].status,'Falta item');
+  assert.equal(existing[0].photo_url,'photo');
+  assert.equal(planShipmentImport([row],[{...existing[0],carrier:'UNIDADE 1 ',destination:'UNIDADE 1 '}]).updates.length,1);
+});
+
 test('ambiguous duplicate lots reject changes instead of overwriting unrelated records',()=>{
   assert.throws(()=>planShipmentImport([row,{...row,date:'2026-10-01'}],[]),/dados diferentes/);
-  assert.throws(()=>planShipmentImport([row],[{id:'a',number:row.lot,date:row.date,version:1},{id:'b',number:row.lot,date:row.date,version:1}]),/mais de um cadastro/);
+  assert.throws(()=>planShipmentImport([row],[{id:'a',number:row.lot,date:row.date,version:1,carrier:row.destination,destination:row.destination},{id:'b',number:row.lot,date:row.date,version:1,carrier:row.destination,destination:row.destination}]),/mais de um cadastro/);
 });

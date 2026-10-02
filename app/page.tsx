@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react"; import { createClient } from "@supabase/supabase-js";
 import {
-  Activity, AlertTriangle, ArrowLeft, ArrowUpRight, Clock,
+  Activity, AlertTriangle, ArrowLeft, ArrowUpRight, ClipboardCopy, Clock,
   History, LogOut, Monitor, Package, Plus, Search, Settings2,
   ShieldCheck, Trash2, Truck, Upload, Users, X
 } from "lucide-react";
@@ -12,6 +12,7 @@ import previewDates from "@/lib/preview-dates.json";
 import previewSnapshot from "@/lib/preview-snapshot.json";
 import {PhotoViewer, PhotoGallery} from "@/components/gallery-viewer";
 import {AnimatedNumber} from "@/components/animated-number";
+import {DailySummary} from "@/components/daily-summary";
 type Shipment={id:string;number:string;nf:string;destination:string;carrier:string;driver:string;plate:string;vehicle:string;dock_id:number|null;scheduled_at:string;volumes:number;weight:number;responsible:string;notes:string;missing_item_notes:string;status:string;version:number;started_at?:string|null;shipped_at?:string|null;created_at?:string;updated_at?:string;photo_url?:string|null};
 type ShipmentPhoto={id:string;shipment_id:string;url:string;created_at:string};
 type Profile={id:string;name:string;role:"visualizador"|"operador"|"admin";active:boolean};
@@ -63,6 +64,7 @@ export default function Home() {
   const [showFilters,setShowFilters] = useState(false);
   const [modal,setModal] = useState<FormLoad|null>(null);
   const [details,setDetails] = useState<Shipment|null>(null);
+  const [summaryDay,setSummaryDay] = useState<string|null>(null);
   const [photoViewer,setPhotoViewer] = useState<Shipment|null>(null);
   const [confirmDelete,setConfirmDelete] = useState<Shipment|null>(null);
   const [importRows,setImportRows] = useState<ImportedShipmentRow[]|null>(null);
@@ -86,12 +88,12 @@ export default function Home() {
   useEffect(()=>{if(!demo||!demoReady)return;try{localStorage.setItem("packem-original-refined-photos-v1",JSON.stringify(photos))}catch{setMessage("Fotos disponíveis nesta sessão. O armazenamento local está cheio.")}},[photos,demo,demoReady]);
   useEffect(()=>{if(!message)return;const timer=setTimeout(()=>setMessage(""),6500);return()=>clearTimeout(timer)},[message]);
   useEffect(()=>{
-    if(!modal&&!details&&!photoViewer&&!confirmDelete&&!unlockOpen&&!importRows)return;
+    if(!modal&&!details&&!photoViewer&&!confirmDelete&&!unlockOpen&&!importRows&&!summaryDay)return;
     const previous=document.activeElement as HTMLElement|null;
     const previousBodyOverflow=document.body.style.overflow;const previousHtmlOverflow=document.documentElement.style.overflow;document.body.style.overflow="hidden";document.documentElement.style.overflow="hidden";
     const focusTimer=setTimeout(()=>document.querySelector<HTMLElement>('.overlay input, .overlay button')?.focus(),0);
     const handle=(event:KeyboardEvent)=>{
-      if(event.key==="Escape"){if(event.target instanceof HTMLInputElement && event.target.type==="file")return;if(document.querySelector('.image-lightbox'))return;setModal(null);setDetails(null);setPhotoViewer(null);setConfirmDelete(null);setUnlockOpen(false);setImportRows(null)}
+      if(event.key==="Escape"){if(event.target instanceof HTMLInputElement && event.target.type==="file")return;if(document.querySelector('.image-lightbox'))return;setModal(null);setDetails(null);setPhotoViewer(null);setConfirmDelete(null);setUnlockOpen(false);setImportRows(null);setSummaryDay(null)}
       if(event.key==="Tab"){
         const scope=document.querySelector('.image-lightbox')||document.querySelector('.overlay');
         const items=Array.from(scope?.querySelectorAll<HTMLElement>('button:not(:disabled), input, select, textarea, [tabindex="0"]')||[]);
@@ -101,7 +103,7 @@ export default function Home() {
     };
     document.addEventListener("keydown",handle);
     return()=>{clearTimeout(focusTimer);document.body.style.overflow=previousBodyOverflow;document.documentElement.style.overflow=previousHtmlOverflow;document.removeEventListener("keydown",handle);previous?.focus()};
-  },[!!modal,!!details,!!photoViewer,!!confirmDelete,!!unlockOpen,!!importRows]);
+  },[!!modal,!!details,!!photoViewer,!!confirmDelete,!!unlockOpen,!!importRows,!!summaryDay]);
   useEffect(()=>{
     if(!supabase) return;
     let active=true;
@@ -215,13 +217,13 @@ export default function Home() {
   function unlockDemo(event:FormEvent){event.preventDefault();if(demoPassword!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}setAccessError("");setDemoUnlocked(true)}
   async function setUserRole(user:Profile,role:Role){if(demo){setProfiles(v=>v.map(p=>p.id===user.id?{...p,role}:p));return}const {error}=await supabase!.from("profiles").update({role}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
   async function toggleUser(user:Profile){if(!supabase)return;const {error}=await supabase.from("profiles").update({active:!user.active}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
-  async function readPdf(file?:File){if(!file)return;setImporting(true);setMessage("");try{const rows=await parseShipmentPdf(file);planShipmentImport(rows,loads.map(load=>({id:load.id,number:load.number,date:dayKey(load.scheduled_at),version:load.version})));setImportRows(rows)}catch(error){setMessage((error as Error).message)}finally{setImporting(false)}}
+  async function readPdf(file?:File){if(!file)return;setImporting(true);setMessage("");try{const rows=await parseShipmentPdf(file);planShipmentImport(rows,loads.map(load=>({id:load.id,number:load.number,date:dayKey(load.scheduled_at),version:load.version,carrier:load.carrier,destination:load.destination})));setImportRows(rows)}catch(error){setMessage((error as Error).message)}finally{setImporting(false)}}
   async function confirmPdfImport() {
     if (!importRows || !canWrite || importing) return;
     setImporting(true);
     let created = 0, corrected = 0;
     try {
-      const plan = planShipmentImport(importRows, loads.map(load => ({ id: load.id, number: load.number, date: dayKey(load.scheduled_at), version: load.version })));
+      const plan = planShipmentImport(importRows, loads.map(load => ({ id: load.id, number: load.number, date: dayKey(load.scheduled_at), version: load.version, carrier: load.carrier, destination: load.destination })));
       const fresh = plan.newRows.map(row => ({
         id: crypto.randomUUID(), number: row.lot, nf: "", destination: row.destination, carrier: row.destination,
         driver: "", plate: "", vehicle: "Kit", dock_id: null, scheduled_at: scheduledTimestamp(row.date),
@@ -229,18 +231,18 @@ export default function Home() {
         missing_item_notes: "", status: "Pendente", version: 1,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       } satisfies Shipment));
-      if (!fresh.length && !plan.dateUpdates.length) {
-        setMessage("Todos os lotes desse PDF já estão cadastrados com a data prevista correta.");
+      if (!fresh.length && !plan.updates.length) {
+        setMessage("Todos os lotes desse PDF já estão cadastrados com data e unidade corretas.");
         setImportRows(null);
         return;
       }
       if (demo) {
-        const updates = new Map(plan.dateUpdates.map(change => [change.id, change.row.date]));
+        const updates = new Map(plan.updates.map(change => [change.id, change]));
         setLoads(current => [...fresh, ...current.map(load => {
-          const date = updates.get(load.id);
-          return date ? { ...load, scheduled_at: scheduledTimestamp(date), version: load.version + 1, updated_at: new Date().toISOString() } : load;
+          const change = updates.get(load.id);
+          return change ? { ...load, ...(change.dateChanged ? { scheduled_at: scheduledTimestamp(change.row.date) } : {}), ...(change.unitChanged ? { carrier: change.row.destination, destination: change.row.destination } : {}), version: load.version + 1, updated_at: new Date().toISOString() } : load;
         })]);
-        created = fresh.length; corrected = plan.dateUpdates.length;
+        created = fresh.length; corrected = plan.updates.length;
       } else {
         const payload = fresh.map(({ id, version, created_at, updated_at, ...row }) => row);
         for (let i = 0; i < payload.length; i += 5) {
@@ -249,9 +251,10 @@ export default function Home() {
           if (error) throw error;
           created += batch.length;
         }
-        for (const change of plan.dateUpdates) {
+        for (const change of plan.updates) {
+          const changes = { ...(change.dateChanged ? { scheduled_at: scheduledTimestamp(change.row.date) } : {}), ...(change.unitChanged ? { carrier: change.row.destination, destination: change.row.destination } : {}) };
           const { data, error } = await supabase!.from("shipments")
-            .update({ scheduled_at: scheduledTimestamp(change.row.date) })
+            .update(changes)
             .eq("id", change.id).eq("version", change.version).select("id");
           if (error) throw error;
           if (!data?.length) throw new Error(`O lote ${change.row.lot} foi alterado durante a importação. Confira a prévia e tente novamente.`);
@@ -262,11 +265,11 @@ export default function Home() {
       setImportRows(null);
       selectCalendar(weekStart(importRows[0].date), "");
       setStageFilter("Pendente");
-      setMessage(`${created} lotes novos · ${corrected} datas previstas corrigidas.`);
+      setMessage(`${created} lotes novos · ${corrected} lotes com data ou unidade corrigida.`);
     } catch (error) {
       if (!demo) { try { await reload(); } catch {} }
       const reason = error instanceof Error ? error.message : (error as { message?: string })?.message || "Falha de conexão ao salvar os lotes.";
-      setMessage(`${reason}${created || corrected ? ` Já foram salvos: ${created} lotes novos e ${corrected} datas corrigidas. Reenvie o PDF para concluir.` : ""}`);
+      setMessage(`${reason}${created || corrected ? ` Já foram salvos: ${created} lotes novos e ${corrected} lotes corrigidos. Reenvie o PDF para concluir.` : ""}`);
     } finally {
       setImporting(false);
     }
@@ -289,7 +292,7 @@ export default function Home() {
     {unlockOpen&&<DemoUnlock password={demoPassword} setPassword={setDemoPassword} submit={event=>{unlockDemo(event);if(demoPassword===DEMO_PASSWORD)setUnlockOpen(false)}} onClose={()=>setUnlockOpen(false)} error={accessError}/>}
     {view==="board"&&<>
       <section className="command-hero">
-      <section className="heading"><div><p>PACKEM / CENTRAL DE EXPEDIÇÃO</p><h1>Controle de expedição<span>.</span></h1><p><i className="pulse-dot"/> Programação e acompanhamento dos lotes</p></div><div className="ops-live"><span><i/> {localPreview?"PRÉVIA DA OPERAÇÃO":"OPERAÇÃO AO VIVO"}</span><b>{now?new Date(now).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"--:--:--"}</b><small>{now?new Date(now).toLocaleDateString("pt-BR"):"Sincronizando"}</small></div><div className="heading-actions">{canWrite&&<><label className={`pdf-upload ${importing?"disabled":""}`}><Upload size={18}/>{importing?"Lendo PDF…":"Carregar romaneio"}<input type="file" accept="application/pdf,.pdf" disabled={importing} onChange={event=>{void readPdf(event.target.files?.[0]);event.currentTarget.value=""}}/></label><button className="primary" onClick={()=>setModal({...emptyLoad(),scheduled_at:scheduledTimestamp((calendarDay&&calendarDay!=="undated"?calendarDay:!allDates&&calendarWeek!==weekStart(dayKey(new Date()))?calendarWeek:dayKey(new Date())))})}><Plus size={18}/> Adicionar lote</button></>}</div></section>
+      <section className="heading"><div><p>PACKEM / CENTRAL DE EXPEDIÇÃO</p><h1>Controle de expedição<span>.</span></h1><p><i className="pulse-dot"/> Programação e acompanhamento dos lotes</p></div><div className="ops-live"><span><i/> {localPreview?"PRÉVIA DA OPERAÇÃO":"OPERAÇÃO AO VIVO"}</span><b>{now?new Date(now).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"--:--:--"}</b><small>{now?new Date(now).toLocaleDateString("pt-BR"):"Sincronizando"}</small></div><div className="heading-actions"><button type="button" onClick={()=>setSummaryDay(calendarDay&&calendarDay!=="undated"?calendarDay:dayKey(new Date()))}><ClipboardCopy size={18}/> Resumo diário</button>{canWrite&&<><label className={`pdf-upload ${importing?"disabled":""}`}><Upload size={18}/>{importing?"Lendo PDF…":"Carregar romaneio"}<input type="file" accept="application/pdf,.pdf" disabled={importing} onChange={event=>{void readPdf(event.target.files?.[0]);event.currentTarget.value=""}}/></label><button className="primary" onClick={()=>setModal({...emptyLoad(),scheduled_at:scheduledTimestamp((calendarDay&&calendarDay!=="undated"?calendarDay:!allDates&&calendarWeek!==weekStart(dayKey(new Date()))?calendarWeek:dayKey(new Date())))})}><Plus size={18}/> Adicionar lote</button></>}</div></section>
       <section className="kpis">{[["Pendentes","Pendente",scheduledLoads.filter(x=>x.status==="Pendente").length,Clock],["Em processo","Em processo",scheduledLoads.filter(x=>x.status==="Em processo").length,Activity],["Falta item","Falta item",scheduledLoads.filter(x=>x.status==="Falta item").length,AlertTriangle],["Concluídos","Concluído",scheduledLoads.filter(x=>x.status==="Concluído").length,ArrowUpRight]].map(([label,stage,value,Icon]:any)=><button type="button" className={`kpi-action ${stageFilter===stage?"is-selected":""}`} key={label} onClick={()=>openStage(stage)} aria-label={'Abrir lotes: '+label}><div>{label}<Icon size={19}/></div><strong><AnimatedNumber value={value} pad={2}/></strong><small>{label==="Falta item"?"Necessitam regularização":"Lotes nesta situação"}</small></button>)}</section>
       </section>
       <section className="lot-search"><Search size={20}/><input aria-label="Pesquisar lote, unidade ou descrição" placeholder="Buscar lote, unidade ou descrição..." value={query} onChange={e=>{setQuery(e.target.value);}}/>{query&&<button aria-label="Limpar pesquisa" onClick={()=>setQuery("")}><X size={18}/></button>}<span>{query?'Buscando lotes em todas as situações':'Consulta rápida da operação'}</span></section>
@@ -301,6 +304,7 @@ export default function Home() {
     {view==="dashboard"&&<OperationDashboard loads={loads} onExplore={(unit,status)=>{setAllDates(true);setCalendarDay("");setQuery(unit);setStageFilter(status);setView("board");setPage(1);}}/>}
     {view==="history"&&<HistoryView audits={audits} loads={loads}/>}
     {view==="team"&&profile?.role==="admin"&&<TeamView profiles={profiles} current={profile} onRole={setUserRole} onToggle={toggleUser} demo={demo}/>}
+    {summaryDay&&<DailySummary loads={loads} initialDay={summaryDay} onClose={()=>setSummaryDay(null)}/>}
     {modal&&<LoadModal value={modal} photos={photos.filter(photo=>photo.shipment_id===modal.id)} onChange={setModal} onClose={()=>setModal(null)} onDeletePhoto={removeLoadPhoto} onSubmit={saveLoad}/>}
     {details&&<Details load={details} late={isLate(details,now)} photos={photos.filter(photo=>photo.shipment_id===details.id)} audits={audits.filter(audit=>audit.shipment_id===details.id)} onClose={()=>setDetails(null)} onEdit={canWrite?()=>{setModal({...details,scheduled_at:details.scheduled_at});setDetails(null)}:undefined}/>}
     {photoViewer&&<PhotoViewer load={photoViewer} photos={photos.filter(photo=>photo.shipment_id===photoViewer.id)} onClose={()=>setPhotoViewer(null)}/>}
@@ -310,31 +314,31 @@ export default function Home() {
 }
 
 function PdfImportPreview({ rows, existing, busy, onClose, onConfirm }: { rows: ImportedShipmentRow[]; existing: Shipment[]; busy: boolean; onClose: () => void; onConfirm: () => void }) {
-  let plan: ReturnType<typeof planShipmentImport> = { newRows: [], dateUpdates: [], unchanged: [] };
+  let plan: ReturnType<typeof planShipmentImport> = { newRows: [], updates: [], unchanged: [] };
   let error = "";
   try {
-    plan = planShipmentImport(rows, existing.map(load => ({ id: load.id, number: load.number, date: dayKey(load.scheduled_at), version: load.version })));
+    plan = planShipmentImport(rows, existing.map(load => ({ id: load.id, number: load.number, date: dayKey(load.scheduled_at), version: load.version, carrier: load.carrier, destination: load.destination })));
   } catch (reason) { error = (reason as Error).message; }
-  const updates = new Map(plan.dateUpdates.map(change => [lotKey(change.row.lot), change]));
+  const updates = new Map(plan.updates.map(change => [lotKey(change.row.lot), change]));
   const unchanged = new Set(plan.unchanged.map(row => lotKey(row.lot)));
-  const count = plan.newRows.length + plan.dateUpdates.length;
+  const count = plan.newRows.length + plan.updates.length;
   return <div className="overlay" onMouseDown={event => !busy && event.target === event.currentTarget && onClose()}>
     <section className="modal pdf-preview">
       <div className="modal-title"><div><small>IMPORTAÇÃO DO PDF</small><h2>Conferir {rows.length} lotes encontrados</h2></div><button disabled={busy} aria-label="Fechar janela" onClick={onClose}><X/></button></div>
-      <p>Ao reenviar um romaneio, as datas previstas dos lotes existentes serão corrigidas. Situação, fotos e data de finalização serão preservadas.</p>
+      <p>Ao reenviar um romaneio, as datas e unidades dos lotes existentes serão corrigidas. Situação, fotos e data de finalização serão preservadas.</p>
       {error && <div className="access-error">{error}</div>}
       <div className="pdf-table-wrap"><table>
         <thead><tr><th>Data prevista</th><th>Destino</th><th>Lote</th><th>Quantidade</th><th>Descrição</th></tr></thead>
         <tbody>{rows.map((row, index) => {
           const update = updates.get(lotKey(row.lot)), same = unchanged.has(lotKey(row.lot));
           return <tr key={`${row.lot}-${index}`} className={same ? "duplicate" : ""}>
-            <td>{longDate(row.date)}{update && <small>Antes: {update.previousDate ? shortDate(update.previousDate) : "sem data"}</small>}</td>
-            <td>{row.destination}</td><td><b>{row.lot}</b><small>{update ? "Corrigir data prevista" : same ? "Já cadastrado · data correta" : "Novo lote"}</small></td>
+            <td>{longDate(row.date)}{update?.dateChanged && <small>Antes: {update.previousDate ? shortDate(update.previousDate) : "sem data"}</small>}</td>
+            <td>{row.destination}{update?.unitChanged && <small>Antes: {update.previousUnit || "não informada"}</small>}</td><td><b>{row.lot}</b><small>{update ? [update.dateChanged ? "Corrigir data" : "",update.unitChanged ? "Corrigir unidade" : ""].filter(Boolean).join(" e ") : same ? "Já cadastrado · data e unidade corretas" : "Novo lote"}</small></td>
             <td>{row.quantity.toLocaleString("pt-BR")}</td><td>{row.description}</td>
           </tr>;
         })}</tbody>
       </table></div>
-      <footer><span>{plan.newRows.length} novos · {plan.dateUpdates.length} datas a corrigir · {plan.unchanged.length} já corretos</span><button disabled={busy} onClick={onClose}>Cancelar</button><button className="primary" disabled={busy || !count || !!error} onClick={onConfirm}>{busy ? "Salvando…" : `Confirmar ${count} lotes`}</button></footer>
+      <footer><span>{plan.newRows.length} novos · {plan.updates.filter(change=>change.dateChanged).length} datas · {plan.updates.filter(change=>change.unitChanged).length} unidades a corrigir · {plan.unchanged.length} já corretos</span><button disabled={busy} onClick={onClose}>Cancelar</button><button className="primary" disabled={busy || !count || !!error} onClick={onConfirm}>{busy ? "Salvando…" : `Confirmar ${count} lotes`}</button></footer>
     </section>
   </div>;
 }

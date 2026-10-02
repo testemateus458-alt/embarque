@@ -101,7 +101,7 @@ export function parseShipmentPdfPages(pages: ShipmentPdfPage[]): ImportedShipmen
       const date = printedDate(item.text);
       return date ? [{ date, ...cellBounds(item, page.lines) }] : [];
     });
-    const destinations = items.filter(item => inside(item, destinationColumn) && item.cy < destinationColumn.y && /\p{L}/u.test(item.text)).map(item => ({ text: item.text, ...cellBounds(item, page.lines) }));
+    const destinations = items.filter(item => !item.vertical && inside(item, destinationColumn) && item.cy < destinationColumn.y && /\p{L}/u.test(item.text)).map(item => ({ ...item, ...cellBounds(item, page.lines) }));
     for (const lot of lots.filter(item => inside(item, lotColumn) && item.cy < lotColumn.y)) {
       const dateCell = dateCells.find(cell => lot.cy > cell.bottom && lot.cy < cell.top);
       if (!dateCell || !Number.isFinite(dateCell.bottom) || !Number.isFinite(dateCell.top)) throw new Error(`Não consegui identificar a data do lote ${lot.text} na coluna DATA. Confira as datas e as bordas do romaneio.`);
@@ -109,7 +109,7 @@ export function parseShipmentPdfPages(pages: ShipmentPdfPage[]): ImportedShipmen
       const quantity = row.find(item => inside(item, quantityColumn) && QUANTITY_PATTERN.test(item.text));
       const description = cleanText(row.filter(item => inside(item, descriptionColumn)).map(item => item.text).join(" "));
       if (!quantity || !description) throw new Error(`Não consegui ler a quantidade ou a descrição do lote ${lot.text}.`);
-      const destination = destinations.find(cell => lot.cy > cell.bottom && lot.cy < cell.top)?.text;
+      const destination = cleanText(destinations.filter(cell => lot.cy > cell.bottom && lot.cy < cell.top).sort((a,b) => Math.abs(a.y-b.y) > 1 ? b.y-a.y : a.x-b.x).map(cell => cell.text).join(" "));
       if (!destination) throw new Error(`Não consegui identificar o destino do lote ${lot.text}.`);
       result.push({ date: dateCell.date, destination, lot: lot.text, quantity: Number(quantity.text.replace(/\./g, "").replace(",", ".")), description });
     }
