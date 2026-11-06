@@ -36,9 +36,9 @@ const DEMO_PASSWORD = "Packem2026";
 
 export default function Home() {
   const demo = !supabase;
-  const [loads,setLoads] = useState<Shipment[]>(demoLoads());
+  const [loads,setLoads] = useState<Shipment[]>(demo?demoLoads():[]);
   const [photos,setPhotos] = useState<ShipmentPhoto[]>(localPreview ? previewSnapshot.photos : []);
-  const [docks,setDocks] = useState<Dock[]>(demoDocks);
+  const [docks,setDocks] = useState<Dock[]>(demo?demoDocks:[]);
   const [profile,setProfile] = useState<Profile | null>(demo?{id:"demo",name:"Marina Costa",role:"admin",active:true}:null);
   const [profiles,setProfiles] = useState<Profile[]>([]);
   const [audits,setAudits] = useState<Audit[]>([]);
@@ -71,6 +71,7 @@ export default function Home() {
   const [importing,setImporting] = useState(false);
   const [login,setLogin] = useState({email:"",password:""});
   const [message,setMessage] = useState("");
+  const [loginNotice,setLoginNotice] = useState("");
   const [loading,setLoading] = useState(!demo);
   const [now,setNow] = useState(0);
   const [demoReady,setDemoReady] = useState(false);
@@ -83,7 +84,7 @@ export default function Home() {
   useEffect(()=>{ setNow(Date.now()); const timer=setInterval(()=>setNow(Date.now()),1000); return()=>clearInterval(timer); },[]);
   useEffect(()=>{if(!demo)return;try{const saved=localStorage.getItem("packem-original-refined-loads-v1");if(saved)setLoads((JSON.parse(saved) as Shipment[]).map(load=>localPreview&&load.scheduled_at==="2026-09-22T12:00:00.000Z"?{...load,scheduled_at:(previewDates as Record<string,string>)[load.number]?scheduledTimestamp((previewDates as Record<string,string>)[load.number]):""}:load))}catch{}finally{setDemoReady(true)}},[demo]);
 
-  useEffect(()=>{if(demo&&demoReady){try{localStorage.setItem("packem-original-refined-loads-v1",JSON.stringify(loads))}catch{setMessage("Armazenamento local cheio. Alterações disponíveis nesta sessão.")}}},[demo,demoReady,loads]);useEffect(()=>{if(!demo&&profile?.id==="public")void reload()},[demo,profile]);
+  useEffect(()=>{if(demo&&demoReady){try{localStorage.setItem("packem-original-refined-loads-v1",JSON.stringify(loads))}catch{setMessage("Armazenamento local cheio. Alterações disponíveis nesta sessão.")}}},[demo,demoReady,loads]);
   useEffect(()=>{if(!demo)return;try{const stored=localStorage.getItem("packem-original-refined-photos-v1");if(stored)setPhotos(JSON.parse(stored))}catch{}},[demo]);
   useEffect(()=>{if(!demo||!demoReady)return;try{localStorage.setItem("packem-original-refined-photos-v1",JSON.stringify(photos))}catch{setMessage("Fotos disponíveis nesta sessão. O armazenamento local está cheio.")}},[photos,demo,demoReady]);
   useEffect(()=>{if(!message)return;const timer=setTimeout(()=>setMessage(""),6500);return()=>clearTimeout(timer)},[message]);
@@ -109,11 +110,11 @@ export default function Home() {
     let active=true;
     async function bootstrap(){
       const {data:{session}}=await supabase!.auth.getSession();
-      if(!session){if(active){setProfile({id:"public",name:"Operação",role:"admin",active:true});setLoading(false);}return;}
+      if(!session){if(active){setProfile(null);setConnection("Acesso necessário");setLoginNotice("Entre com seu usuário autorizado para consultar os embarques.");setLoading(false);}return;}
       await reload();
     }
     bootstrap();
-    const {data:auth}=supabase.auth.onAuthStateChange((_event: unknown,session: any)=>{ if(!session){setProfile({id:"public",name:"Operação",role:"admin",active:true});setLoading(false);} else void reload(); });
+    const {data:auth}=supabase.auth.onAuthStateChange((_event: unknown,session: any)=>{if(!session){setProfile(null);setConnection("Acesso necessário");setLoginNotice("Sua sessão terminou. Entre novamente para consultar os embarques.");setLoading(false);}else{setLoginNotice("");void reload();}});
     const channel=supabase.channel("nexo-operation")
       .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
@@ -125,15 +126,15 @@ export default function Home() {
   async function reload(){
     if(!supabase)return;
     const {data:{user}}=await supabase.auth.getUser();
-    if(!user){const [l,d,pics]=await Promise.all([supabase.from("shipments").select("*").order("scheduled_at"),supabase.from("docks").select("*").order("id"),supabase.from("shipment_photos").select("*").order("created_at",{ascending:false})]);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setPhotos((pics.data||[]) as ShipmentPhoto[]);setConnection("Conectado");setLoading(false);return;}
+    if(!user){setProfile(null);setConnection("Acesso necessário");setLoginNotice("Sua sessão não está ativa. Entre com seu usuário para carregar os embarques.");setLoading(false);return;}
     const [p,l,d,pics]=await Promise.all([
       supabase.from("profiles").select("*").eq("id",user.id).single(),
       supabase.from("shipments").select("*").order("scheduled_at"),
       supabase.from("docks").select("*").order("id"),
       supabase.from("shipment_photos").select("*").order("created_at",{ascending:false})
     ]);
-    if(p.error||l.error||d.error){setMessage('Não foi possível atualizar os dados. Tente novamente.');setLoading(false);return;}
-    setProfile(p.data as Profile);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setPhotos((pics.data||[]) as ShipmentPhoto[]);setLoading(false);
+    if(p.error||l.error||d.error){const notice='Não foi possível atualizar os embarques. Confira o acesso e tente novamente.';setMessage(notice);if(!profile)setLoginNotice(notice);setLoading(false);return;}
+    setProfile(p.data as Profile);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setPhotos((pics.data||[]) as ShipmentPhoto[]);setLoginNotice("");setLoading(false);
     void reloadAudit(); if(p.data.role==="admin")void reloadProfiles();
   }
   async function reloadAudit(){if(!supabase)return;const {data}=await supabase.from("audit_log").select("*").order("created_at",{ascending:false}).limit(200);setAudits((data||[]) as Audit[])}
@@ -213,7 +214,7 @@ export default function Home() {
   async function move(load:Shipment,direction:number){const status=direction===1?(load.status==='Pendente'?'Em processo':load.status==='Falta item'?'Em processo':'Concluído'):'Falta item';if(!canWrite)return;setModal({...load,status,shipped_at:status==='Concluído'?(load.shipped_at||scheduledTimestamp(dayKey(new Date()))):null})}
   function openStage(stage:string){setQuery("");setStageFilter(stage);setPage(1);window.setTimeout(()=>document.querySelector('.operation-grid')?.scrollIntoView({behavior:'smooth',block:'start'}),0)}
   async function removeLoad(){if(!confirmDelete||profile?.role!=="admin")return;if(demo){setLoads(v=>v.filter(x=>x.id!==confirmDelete.id));setConfirmDelete(null);return}const {error}=await supabase!.from("shipments").delete().eq("id",confirmDelete.id);if(error)setMessage(error.message);else{setConfirmDelete(null);await reload()}}
-  async function signIn(e:FormEvent){e.preventDefault();setLoading(true);const {error}=await supabase!.auth.signInWithPassword(login);setMessage(error?"E-mail ou senha inválidos.":"");setLoading(false)}
+  async function signIn(e:FormEvent){e.preventDefault();setLoading(true);setLoginNotice("");const {error}=await supabase!.auth.signInWithPassword(login);if(error)setLoginNotice("E-mail ou senha inválidos.");setLoading(false)}
   function unlockDemo(event:FormEvent){event.preventDefault();if(demoPassword!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}setAccessError("");setDemoUnlocked(true)}
   async function setUserRole(user:Profile,role:Role){if(demo){setProfiles(v=>v.map(p=>p.id===user.id?{...p,role}:p));return}const {error}=await supabase!.from("profiles").update({role}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
   async function toggleUser(user:Profile){if(!supabase)return;const {error}=await supabase.from("profiles").update({active:!user.active}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
@@ -284,6 +285,7 @@ export default function Home() {
 
 
   if(loading)return <div className="loading"><Activity className="spin"/> Sincronizando operação…</div>;
+  if(!demo&&!profile)return <Login login={login} setLogin={setLogin} submit={signIn} message={loginNotice}/>;
   return <main className={`shell original-polish ${tv?"tv":""}`}>
     <div className="ambient-grid" aria-hidden="true"><i/><i/><i/></div>
     <header><button className="brand" onClick={()=>setView("board")}><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></button><span className="live"><i/> {connection.toUpperCase()}</span><nav><button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}><Activity size={16}/> Dashboard</button><button className={view==="board"?"active":""} onClick={()=>setView("board")}>Operação</button></nav>{localPreview&&demoUnlocked&&<button className="unlock-button unlocked" onClick={()=>setDemoUnlocked(false)}><ShieldCheck size={16}/> Edição liberada</button>}{!demoUnlocked&&<button className="unlock-button" onClick={()=>{if(localPreview){setDemoUnlocked(true);return}setAccessError("");setUnlockOpen(true)}}>Liberar alterações</button>}<button onClick={async()=>{if(tv){await document.exitFullscreen?.();setTv(false);}else{try{await document.documentElement.requestFullscreen?.();setTv(true);}catch{setTv(false);}}}}><Monitor size={16}/> {tv?"Sair da TV":"Modo TV"}</button></header>
