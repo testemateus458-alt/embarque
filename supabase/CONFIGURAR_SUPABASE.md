@@ -1,63 +1,54 @@
-# Configuração do Supabase — Packem
+# Configuração do Supabase — Packem Embarque
 
-## 1. Criar o banco
+O site **não tem mais login**. Qualquer pessoa que abrir o endereço vê os
+embarques, os indicadores e as fotos, atualizados em tempo real.
+Para **adicionar, editar, excluir, mover situação, enviar/remover fotos ou
+importar romaneio** é preciso clicar em **Liberar edição** e digitar a senha
+de edição. Ela fica guardada naquele navegador até alguém clicar em
+**Bloquear edição**.
 
-No Supabase, abra **SQL Editor > New query**, cole todo o conteúdo de
-[`schema.sql`](./schema.sql) e clique em **Run**. Execute uma única vez em um
-projeto novo. Esse arquivo cria as tabelas, auditoria, permissões, perfis e
-atualização em tempo real.
+## Como a proteção funciona
 
-## 2. Criar o primeiro acesso
+- A leitura é pública (RLS com `select` para `anon`).
+- Ninguém grava direto nas tabelas: `insert/update/delete` foram revogados.
+- Toda gravação passa pelas funções `public.edit_*` (RPC, `security definer`),
+  que conferem a senha com o hash bcrypt em `private.edit_secret`
+  (esquema não exposto pela API). Senha errada espera 1,5 s e é recusada.
+- Fotos: `edit_photo_upload_ticket` libera o envio de um arquivo por 10 min;
+  `edit_delete_photo` libera a exclusão do arquivo. Sem isso o Storage recusa.
+- Tempo real: `shipments`, `shipment_photos`, `audit_log` e `docks` estão na
+  publicação `supabase_realtime`.
 
-Abra **Authentication > Users > Add user > Create new user** e informe o
-e-mail e a senha do responsável pelo sistema. Depois, no **SQL Editor**, rode:
+## Projeto novo
 
-```sql
-update public.profiles
-set role = 'admin'
-where id = 'COLE_AQUI_O_UUID_DO_USUARIO';
-```
-
-O UUID fica na coluna **ID** do usuário criado em Authentication > Users.
-
-## 3. Criar os demais usuários
-
-Crie cada pessoa em **Authentication > Users**. Todo novo usuário entra como
-`visualizador`. O administrador altera para `operador` ou `admin` pela tela
-**Equipe** do sistema.
-
-Em **Authentication > Providers > Email**, deixe o cadastro público
-desativado. Assim, somente a administração cria novos acessos.
-
-## 4. Pegar as chaves do projeto
-
-Abra **Project Settings > API** e copie apenas:
-
-- Project URL
-- Publishable key (ou a chave `anon`)
-
-Nunca use a chave `service_role` no site.
-
-## 5. Ligar o sistema ao banco
-
-No servidor onde o site será publicado, adicione as duas variáveis abaixo
-com os valores copiados no passo anterior:
+1. **SQL Editor > New query**: cole [`schema.sql`](./schema.sql) e rode uma vez.
+2. Na hospedagem do site, configure:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=SUA_CHAVE_PUBLICA
 ```
 
-O modelo pronto está em [`.env.example`](../.env.example). Essas variáveis não
-são coladas no SQL Editor; elas ficam na configuração do site hospedado.
+Nunca use a chave `service_role` no site.
 
-## 6. Autorizar o endereço do site
+## Projeto existente
 
-Depois de publicar, abra **Authentication > URL Configuration** e informe:
+Aplique, nesta ordem, as migrações de [`migrations/`](./migrations):
 
-- Site URL: endereço público do sistema
-- Redirect URLs: o mesmo endereço e, se necessário, o endereço local de teste
+1. `20261109120000_leitura_publica_e_senha_de_edicao.sql` — pode ir antes do
+   deploy (não quebra o site antigo).
+2. Publique o novo site.
+3. `20261109120100_bloquear_escrita_direta.sql` — logo após o deploy (a partir
+   daí o site antigo não consegue mais gravar).
 
-O script já coloca cargas, docas, perfis e auditoria no Realtime. Após salvar
-as variáveis e publicar o site, as alterações feitas por uma pessoa aparecerão
-para as outras em tempo real.
+## Trocar a senha de edição
+
+```sql
+update private.edit_secret
+set password_hash = extensions.crypt('NOVA_SENHA', extensions.gen_salt('bf', 10)),
+    updated_at = now()
+where id = 1;
+```
+
+Os navegadores com a senha antiga passam a ver "Senha de edição inválida" e
+precisam digitar a nova.

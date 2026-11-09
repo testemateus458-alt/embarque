@@ -3,8 +3,8 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react"; import { createClient } from "@supabase/supabase-js";
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowUpRight, ClipboardCopy, Clock,
-  History, LogOut, Monitor, Package, Plus, Search, Settings2,
-  ShieldCheck, Trash2, Truck, Upload, Users, X
+  History, Lock, Monitor, Package, Plus, Search,
+  ShieldCheck, Upload, X
 } from "lucide-react";
 import {ShipmentWeek} from "@/components/shipment-week";
 import {dayKey,weekStart,addDays,scheduledTimestamp,shipmentDay,shortDate,longDate} from "@/lib/shipment-calendar";
@@ -15,7 +15,6 @@ import {AnimatedNumber} from "@/components/animated-number";
 import {DailySummary} from "@/components/daily-summary";
 type Shipment={id:string;number:string;nf:string;destination:string;carrier:string;driver:string;plate:string;vehicle:string;dock_id:number|null;scheduled_at:string;volumes:number;weight:number;responsible:string;notes:string;missing_item_notes:string;status:string;version:number;started_at?:string|null;shipped_at?:string|null;created_at?:string;updated_at?:string;photo_url?:string|null};
 type ShipmentPhoto={id:string;shipment_id:string;url:string;created_at:string};
-type Profile={id:string;name:string;role:"visualizador"|"operador"|"admin";active:boolean};
 type Audit={id:number;shipment_id:string;shipment_number:string;action:string;actor_name:string;created_at:string;before_data:Shipment|null;after_data:Shipment|null};
 type Dock={id:number;name:string};
 const localPreview = process.env.NEXT_PUBLIC_PREVIEW_MODE === "true";
@@ -28,21 +27,21 @@ import {OperationDashboard} from '@/components/operation-dashboard';
 import {parseShipmentPdf, type ImportedShipmentRow} from '@/lib/pdf-import';
 import {planShipmentImport, lotKey} from '@/lib/shipment-import';
 
-type Role = "visualizador" | "operador" | "admin";
 type FormLoad = Omit<Shipment, "id" | "version"> & { id?: string; version?: number };
 const emptyLoad = (): FormLoad => ({ number:"", nf:"", destination:"", carrier:"", driver:"", plate:"", vehicle:"Requisição", dock_id:null, scheduled_at:scheduledTimestamp(dayKey(new Date())), volumes:0, weight:0, responsible:"", notes:"", missing_item_notes:"", status:"Pendente" });
 const actionLabel: Record<string,string> = { INSERT:"Cadastrou", UPDATE:"Atualizou", DELETE:"Excluiu" };
-const DEMO_PASSWORD = "Packem2026";
+const EDIT_PASSWORD_KEY = "packem-edit-password";
+const DEMO_PASSWORD = "162424";
+const EDITOR_NAME = "Edição com senha";
+const isWrongPassword = (error: unknown) => (error as { code?: string } | null)?.code === "28P01";
 
 export default function Home() {
   const demo = !supabase;
   const [loads,setLoads] = useState<Shipment[]>(demo?demoLoads():[]);
   const [photos,setPhotos] = useState<ShipmentPhoto[]>(localPreview ? previewSnapshot.photos : []);
   const [docks,setDocks] = useState<Dock[]>(demo?demoDocks:[]);
-  const [profile,setProfile] = useState<Profile | null>(demo?{id:"demo",name:"Marina Costa",role:"admin",active:true}:null);
-  const [profiles,setProfiles] = useState<Profile[]>([]);
   const [audits,setAudits] = useState<Audit[]>([]);
-  const [view,setView] = useState<"board"|"dashboard"|"history"|"team">("board");
+  const [view,setView] = useState<"board"|"dashboard"|"history">("board");
   const [tv,setTv] = useState(false); useEffect(()=>{const sync=()=>setTv(Boolean(document.fullscreenElement));document.addEventListener("fullscreenchange",sync);return()=>document.removeEventListener("fullscreenchange",sync)},[]);
   const [query,setQuery] = useState("");
   const [page,setPage] = useState(1);
@@ -69,18 +68,20 @@ export default function Home() {
   const [confirmDelete,setConfirmDelete] = useState<Shipment|null>(null);
   const [importRows,setImportRows] = useState<ImportedShipmentRow[]|null>(null);
   const [importing,setImporting] = useState(false);
-  const [login,setLogin] = useState({email:"",password:""});
   const [message,setMessage] = useState("");
-  const [loginNotice,setLoginNotice] = useState("");
-  const [loginOpen,setLoginOpen] = useState(false);
   const [loading,setLoading] = useState(!demo);
   const [now,setNow] = useState(0);
   const [demoReady,setDemoReady] = useState(false);
-  const [demoUnlocked,setDemoUnlocked] = useState(false);
+  // Senha de edição liberada neste navegador. A conferência real é feita no banco (funções edit_*).
+  const [editPassword,setEditPassword] = useState("");
   const [unlockOpen,setUnlockOpen] = useState(false);
+  const [unlocking,setUnlocking] = useState(false);
   const [demoPassword,setDemoPassword] = useState("");
   const [accessError,setAccessError] = useState("");
-  const canWrite = (profile?.role === "operador" || profile?.role === "admin") && demoUnlocked;
+  const canWrite = Boolean(editPassword);
+  useEffect(()=>{try{const saved=localStorage.getItem(EDIT_PASSWORD_KEY);if(saved)setEditPassword(saved)}catch{}},[]);
+  function lockEditing(notice=""){setEditPassword("");try{localStorage.removeItem(EDIT_PASSWORD_KEY)}catch{}if(notice)setMessage(notice)}
+  function handleWriteError(error:unknown,fallback:string){if(isWrongPassword(error)){lockEditing("Senha de edição inválida ou alterada. Digite a senha novamente.");setAccessError("");setUnlockOpen(true);return}setMessage((error as {message?:string}|null)?.message||fallback)}
 
   useEffect(()=>{ setNow(Date.now()); const timer=setInterval(()=>setNow(Date.now()),1000); return()=>clearInterval(timer); },[]);
   useEffect(()=>{if(!demo)return;try{const saved=localStorage.getItem("packem-original-refined-loads-v1");if(saved)setLoads((JSON.parse(saved) as Shipment[]).map(load=>localPreview&&load.scheduled_at==="2026-09-22T12:00:00.000Z"?{...load,scheduled_at:(previewDates as Record<string,string>)[load.number]?scheduledTimestamp((previewDates as Record<string,string>)[load.number]):""}:load))}catch{}finally{setDemoReady(true)}},[demo]);
@@ -90,12 +91,12 @@ export default function Home() {
   useEffect(()=>{if(!demo||!demoReady)return;try{localStorage.setItem("packem-original-refined-photos-v1",JSON.stringify(photos))}catch{setMessage("Fotos disponíveis nesta sessão. O armazenamento local está cheio.")}},[photos,demo,demoReady]);
   useEffect(()=>{if(!message)return;const timer=setTimeout(()=>setMessage(""),6500);return()=>clearTimeout(timer)},[message]);
   useEffect(()=>{
-    if(!modal&&!details&&!photoViewer&&!confirmDelete&&!unlockOpen&&!importRows&&!summaryDay&&!loginOpen)return;
+    if(!modal&&!details&&!photoViewer&&!confirmDelete&&!unlockOpen&&!importRows&&!summaryDay)return;
     const previous=document.activeElement as HTMLElement|null;
     const previousBodyOverflow=document.body.style.overflow;const previousHtmlOverflow=document.documentElement.style.overflow;document.body.style.overflow="hidden";document.documentElement.style.overflow="hidden";
     const focusTimer=setTimeout(()=>document.querySelector<HTMLElement>('.overlay input, .overlay button')?.focus(),0);
     const handle=(event:KeyboardEvent)=>{
-      if(event.key==="Escape"){if(event.target instanceof HTMLInputElement && event.target.type==="file")return;if(document.querySelector('.image-lightbox'))return;setModal(null);setDetails(null);setPhotoViewer(null);setConfirmDelete(null);setUnlockOpen(false);setImportRows(null);setSummaryDay(null);setLoginOpen(false)}
+      if(event.key==="Escape"){if(event.target instanceof HTMLInputElement && event.target.type==="file")return;if(document.querySelector('.image-lightbox'))return;setModal(null);setDetails(null);setPhotoViewer(null);setConfirmDelete(null);setUnlockOpen(false);setImportRows(null);setSummaryDay(null)}
       if(event.key==="Tab"){
         const scope=document.querySelector('.image-lightbox')||document.querySelector('.overlay');
         const items=Array.from(scope?.querySelectorAll<HTMLElement>('button:not(:disabled), input, select, textarea, [tabindex="0"]')||[]);
@@ -105,41 +106,35 @@ export default function Home() {
     };
     document.addEventListener("keydown",handle);
     return()=>{clearTimeout(focusTimer);document.body.style.overflow=previousBodyOverflow;document.documentElement.style.overflow=previousHtmlOverflow;document.removeEventListener("keydown",handle);previous?.focus()};
-  },[!!modal,!!details,!!photoViewer,!!confirmDelete,!!unlockOpen,!!importRows,!!summaryDay,loginOpen]);
+  },[!!modal,!!details,!!photoViewer,!!confirmDelete,!!unlockOpen,!!importRows,!!summaryDay]);
   useEffect(()=>{
     if(!supabase) return;
-    let active=true;
-    async function bootstrap(){
-      const {data:{session}}=await supabase!.auth.getSession();
-      if(!session){if(active){setProfile(null);setConnection("Acesso necessário");setLoginNotice("Entre com seu usuário autorizado para consultar os embarques.");setLoading(false);}return;}
-      await reload();
-    }
-    bootstrap();
-    const {data:auth}=supabase.auth.onAuthStateChange((_event: unknown,session: any)=>{if(!session){setProfile(null);setConnection("Acesso necessário");setLoginNotice("Sua sessão terminou. Entre novamente para consultar os embarques.");setLoading(false);}else{setLoginNotice("");void reload();}});
+    // Leitura pública: qualquer visitante carrega a programação e recebe as mudanças em tempo real.
+    void reload();
+    let pending:ReturnType<typeof setTimeout>|undefined;
+    const schedule=()=>{clearTimeout(pending);pending=setTimeout(()=>void reload(),250)};
     const channel=supabase.channel("nexo-operation")
-      .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},()=>void reload())
+      .on("postgres_changes",{event:"*",schema:"public",table:"shipments"},schedule)
+      .on("postgres_changes",{event:"*",schema:"public",table:"shipment_photos"},schedule)
       .on("postgres_changes",{event:"*",schema:"public",table:"audit_log"},()=>void reloadAudit())
-      .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},()=>void reload()).subscribe((status:string)=>setConnection(status==='SUBSCRIBED'?'Conectado': 'Reconectando'));
-    const refresh=setInterval(()=>void reload(),2000);
-    return()=>{active=false;clearInterval(refresh);auth.subscription.unsubscribe();void supabase!.removeChannel(channel)};
+      .subscribe((status:string)=>{setConnection(status==='SUBSCRIBED'?'Conectado':'Reconectando');if(status==='SUBSCRIBED')void reload()});
+    // Segurança extra caso o tempo real caia: atualiza a cada 30 s.
+    const refresh=setInterval(()=>void reload(),30000);
+    return()=>{clearTimeout(pending);clearInterval(refresh);void supabase!.removeChannel(channel)};
   },[]);
 
   async function reload(){
     if(!supabase)return;
-    const {data:{user}}=await supabase.auth.getUser();
-    if(!user){setProfile(null);setConnection("Acesso necessário");setLoginNotice("Sua sessão não está ativa. Entre com seu usuário para carregar os embarques.");setLoading(false);return;}
-    const [p,l,d,pics]=await Promise.all([
-      supabase.from("profiles").select("*").eq("id",user.id).single(),
+    const [l,d,pics]=await Promise.all([
       supabase.from("shipments").select("*").order("scheduled_at"),
       supabase.from("docks").select("*").order("id"),
       supabase.from("shipment_photos").select("*").order("created_at",{ascending:false})
     ]);
-    if(p.error||l.error||d.error){const notice='Não foi possível atualizar os embarques. Confira o acesso e tente novamente.';setMessage(notice);if(!profile)setLoginNotice(notice);setLoading(false);return;}
-    setProfile(p.data as Profile);setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);setPhotos((pics.data||[]) as ShipmentPhoto[]);setLoginNotice("");setLoading(false);
-    void reloadAudit(); if(p.data.role==="admin")void reloadProfiles();
+    if(l.error||d.error){setMessage('Não foi possível atualizar os embarques. Verifique a conexão; tentaremos novamente.');setConnection('Reconectando');setLoading(false);return;}
+    setLoads((l.data||[]) as Shipment[]);setDocks((d.data||[]) as Dock[]);if(!pics.error)setPhotos((pics.data||[]) as ShipmentPhoto[]);setLoading(false);
+    void reloadAudit();
   }
   async function reloadAudit(){if(!supabase)return;const {data}=await supabase.from("audit_log").select("*").order("created_at",{ascending:false}).limit(200);setAudits((data||[]) as Audit[])}
-  async function reloadProfiles(){if(!supabase)return;const {data}=await supabase.from("profiles").select("*").order("name");setProfiles((data||[]) as Profile[])}
 
   const filtered=useMemo(()=>scheduledLoads.filter(load=>{
     const hay=[load.number,load.carrier,load.notes,load.missing_item_notes,load.driver,load.plate].join(" ").toLowerCase();
@@ -161,21 +156,20 @@ export default function Home() {
       if(candidate.id){
         saved={...candidate,version:(previous?.version||candidate.version||0)+1,updated_at:new Date().toISOString()};
         setLoads(v=>v.map(x=>x.id===candidate.id?{...x,...saved}:x));
-        setAudits(v=>[{id:Date.now(),shipment_id:candidate.id!,shipment_number:candidate.number,action:"UPDATE",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:previous||null,after_data:saved},...v]);
+        setAudits(v=>[{id:Date.now(),shipment_id:candidate.id!,shipment_number:candidate.number,action:"UPDATE",actor_name:EDITOR_NAME,created_at:new Date().toISOString(),before_data:previous||null,after_data:saved},...v]);
       }else{
         saved={...candidate,id:crypto.randomUUID(),version:1,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
         setLoads(v=>[...v,saved]);
-        setAudits(v=>[{id:Date.now(),shipment_id:saved.id,shipment_number:saved.number,action:"INSERT",actor_name:profile!.name,created_at:new Date().toISOString(),before_data:null,after_data:saved},...v]);
+        setAudits(v=>[{id:Date.now(),shipment_id:saved.id,shipment_number:saved.number,action:"INSERT",actor_name:EDITOR_NAME,created_at:new Date().toISOString(),before_data:null,after_data:saved},...v]);
       }
       if(stagedPhotos.length)await Promise.all(stagedPhotos.map(photo=>uploadLoadPhoto(saved,photo)));
       revealDate(shipmentDay(saved));setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);return;
     }
-    const payload={...candidate};delete (payload as Partial<Shipment>).id;delete (payload as Partial<Shipment>).version;
-    const result=candidate.id
-      ? await supabase!.from("shipments").update(payload).eq("id",candidate.id).eq("version",candidate.version!).select().single()
-      : await supabase!.from("shipments").insert(payload).select().single();
-    if(result.error){setMessage(result.error.code==="23505"?"Número ou doca já está em uso.":result.error.message);return}
-    if(candidate.id&&!result.data){setMessage("A carga foi alterada por outra pessoa. Atualizamos os dados; revise antes de salvar novamente.");await reload();return}
+    const payload:Record<string,unknown>={...candidate};delete payload.photo_url;delete payload.created_at;delete payload.updated_at;delete payload.started_at;
+    if(!candidate.id){delete payload.id;delete payload.version;}
+    const result=await supabase!.rpc("edit_save_shipment",{p_password:editPassword,p_data:payload});
+    if(result.error){if(result.error.code==="23505")setMessage("Número ou doca já está em uso.");else handleWriteError(result.error,"Não foi possível salvar o lote.");return}
+    if(!result.data?.id){setMessage("A carga foi alterada por outra pessoa. Atualizamos os dados; revise antes de salvar novamente.");await reload();return}
     if(stagedPhotos.length&&result.data)await Promise.all(stagedPhotos.map(photo=>uploadLoadPhoto(result.data as Shipment,photo)));
     revealDate(shipmentDay((result.data||candidate) as Shipment));setStageFilter(candidate.status);setDetails(null);setModal(null);setMessage(`Lote ${candidate.number}: ${candidate.status}.`);await reload();
   }
@@ -186,39 +180,44 @@ export default function Home() {
     try{
       if(demo){const url=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error("Não foi possível ler a foto."));reader.readAsDataURL(file)});const photo={id:crypto.randomUUID(),shipment_id:load.id,url,created_at:new Date().toISOString()};setPhotos(current=>[photo,...current]);setLoads(current=>current.map(item=>item.id===load.id?{...item,photo_url:url,updated_at:new Date().toISOString()}:item));setMessage(`Foto adicionada ao lote ${load.number}.`);return;}
       const extension=(file.name.split(".").pop()||"jpg").toLowerCase();
-      const path=`${load.id}/${Date.now()}.${extension}`;
+      // O banco confere a senha e libera o envio de um arquivo neste caminho por alguns minutos.
+      const ticket=await supabase!.rpc("edit_photo_upload_ticket",{p_password:editPassword,p_shipment_id:load.id,p_extension:extension});
+      if(ticket.error)throw ticket.error;
+      const path=ticket.data as string;
       const {error:uploadError}=await supabase!.storage.from("carga-fotos").upload(path,file,{upsert:false,contentType:file.type});
       if(uploadError)throw uploadError;
       const {data:urlData}=supabase!.storage.from("carga-fotos").getPublicUrl(path);
-      const {error:saveError}=await supabase!.from("shipment_photos").insert({shipment_id:load.id,url:urlData.publicUrl});
+      const {error:saveError}=await supabase!.rpc("edit_add_photo",{p_password:editPassword,p_shipment_id:load.id,p_url:urlData.publicUrl});
       if(saveError)throw saveError;
       setMessage(`Foto adicionada ao lote ${load.number}.`);await reload();
-    }catch(error){setMessage(error instanceof Error?error.message:"Não foi possível enviar a foto.");}
+    }catch(error){handleWriteError(error,"Não foi possível enviar a foto.");}
   }
 
   async function removeLoadPhoto(photo:ShipmentPhoto){
     if(!canWrite)return;
     if(demo){setPhotos(current=>current.filter(item=>item.id!==photo.id));return;}
-    const {data,error}=await supabase!.from("shipment_photos").delete().eq("id",photo.id).select("id");
-    if(error||!data?.length){setMessage(error?.message||"A foto não foi removida. Libere as alterações e tente novamente.");return;}
+    const {data:storagePath,error}=await supabase!.rpc("edit_delete_photo",{p_password:editPassword,p_photo_id:photo.id});
+    if(error){handleWriteError(error,"A foto não foi removida. Tente novamente.");return;}
     setPhotos(current=>current.filter(item=>item.id!==photo.id));
-    const publicPrefix="/storage/v1/object/public/carga-fotos/";
-    const pathIndex=photo.url.indexOf(publicPrefix);
-    if(pathIndex>=0){
-      const storagePath=decodeURIComponent(photo.url.slice(pathIndex+publicPrefix.length));
-      await supabase!.storage.from("carga-fotos").remove([storagePath]);
-    }
+    if(storagePath)await supabase!.storage.from("carga-fotos").remove([storagePath as string]);
     await reload();
     setMessage("Foto removida da carga.");
   }
 
   async function move(load:Shipment,direction:number){const status=direction===1?(load.status==='Pendente'?'Em processo':load.status==='Falta item'?'Em processo':'Concluído'):'Falta item';if(!canWrite)return;setModal({...load,status,shipped_at:status==='Concluído'?(load.shipped_at||scheduledTimestamp(dayKey(new Date()))):null})}
   function openStage(stage:string){setQuery("");setStageFilter(stage);setPage(1);window.setTimeout(()=>document.querySelector('.operation-grid')?.scrollIntoView({behavior:'smooth',block:'start'}),0)}
-  async function removeLoad(){if(!confirmDelete||profile?.role!=="admin")return;if(demo){setLoads(v=>v.filter(x=>x.id!==confirmDelete.id));setConfirmDelete(null);return}const {error}=await supabase!.from("shipments").delete().eq("id",confirmDelete.id);if(error)setMessage(error.message);else{setConfirmDelete(null);await reload()}}
-  async function signIn(e:FormEvent){e.preventDefault();setLoading(true);setLoginNotice("");const {error}=await supabase!.auth.signInWithPassword(login);if(error)setLoginNotice("E-mail ou senha inválidos.");else{setLoginOpen(false);setLogin({email:"",password:""})}setLoading(false)}
-  function unlockDemo(event:FormEvent){event.preventDefault();if(demoPassword!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}setAccessError("");setDemoUnlocked(true)}
-  async function setUserRole(user:Profile,role:Role){if(demo){setProfiles(v=>v.map(p=>p.id===user.id?{...p,role}:p));return}const {error}=await supabase!.from("profiles").update({role}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
-  async function toggleUser(user:Profile){if(!supabase)return;const {error}=await supabase.from("profiles").update({active:!user.active}).eq("id",user.id);if(error)setMessage(error.message);else await reloadProfiles()}
+  async function removeLoad(){if(!confirmDelete||!canWrite)return;if(demo){setLoads(v=>v.filter(x=>x.id!==confirmDelete.id));setConfirmDelete(null);return}const {error}=await supabase!.rpc("edit_delete_shipment",{p_password:editPassword,p_id:confirmDelete.id});if(error){setConfirmDelete(null);handleWriteError(error,"Não foi possível excluir o lote.")}else{setConfirmDelete(null);await reload()}}
+  async function unlockEditing(event:FormEvent){
+    event.preventDefault();if(unlocking)return;
+    const password=demoPassword.trim();if(!password){setAccessError("Digite a senha.");return}
+    setUnlocking(true);setAccessError("");
+    try{
+      if(demo){if(password!==DEMO_PASSWORD){setAccessError("Senha inválida. Tente novamente.");return}}
+      else{const {error}=await supabase!.rpc("edit_check_password",{p_password:password});if(error){setAccessError(isWrongPassword(error)?"Senha inválida. Tente novamente.":"Não foi possível conferir a senha agora. Tente novamente.");return}}
+      setEditPassword(password);try{localStorage.setItem(EDIT_PASSWORD_KEY,password)}catch{}
+      setDemoPassword("");setUnlockOpen(false);setMessage("Edição liberada neste navegador.");
+    }finally{setUnlocking(false)}
+  }
   async function readPdf(file?:File){if(!file)return;setImporting(true);setMessage("");try{const rows=await parseShipmentPdf(file);planShipmentImport(rows,loads.map(load=>({id:load.id,number:load.number,date:dayKey(load.scheduled_at),version:load.version,carrier:load.carrier,destination:load.destination})));setImportRows(rows)}catch(error){setMessage((error as Error).message)}finally{setImporting(false)}}
   async function confirmPdfImport() {
     if (!importRows || !canWrite || importing) return;
@@ -229,7 +228,7 @@ export default function Home() {
       const fresh = plan.newRows.map(row => ({
         id: crypto.randomUUID(), number: row.lot, nf: "", destination: row.destination, carrier: row.destination,
         driver: "", plate: "", vehicle: "Kit", dock_id: null, scheduled_at: scheduledTimestamp(row.date),
-        volumes: row.quantity, weight: 0, responsible: profile?.name || "", notes: row.description,
+        volumes: row.quantity, weight: 0, responsible: "", notes: row.description,
         missing_item_notes: "", status: "Pendente", version: 1,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       } satisfies Shipment));
@@ -247,21 +246,11 @@ export default function Home() {
         created = fresh.length; corrected = plan.updates.length;
       } else {
         const payload = fresh.map(({ id, version, created_at, updated_at, ...row }) => row);
-        for (let i = 0; i < payload.length; i += 5) {
-          const batch = payload.slice(i, i + 5);
-          const { error } = await supabase!.from("shipments").insert(batch);
-          if (error) throw error;
-          created += batch.length;
-        }
-        for (const change of plan.updates) {
-          const changes = { ...(change.dateChanged ? { scheduled_at: scheduledTimestamp(change.row.date) } : {}), ...(change.unitChanged ? { carrier: change.row.destination, destination: change.row.destination } : {}) };
-          const { data, error } = await supabase!.from("shipments")
-            .update(changes)
-            .eq("id", change.id).eq("version", change.version).select("id");
-          if (error) throw error;
-          if (!data?.length) throw new Error(`O lote ${change.row.lot} foi alterado durante a importação. Confira a prévia e tente novamente.`);
-          corrected++;
-        }
+        const updates = plan.updates.map(change => ({ id: change.id, version: change.version, number: change.row.lot, ...(change.dateChanged ? { scheduled_at: scheduledTimestamp(change.row.date) } : {}), ...(change.unitChanged ? { carrier: change.row.destination, destination: change.row.destination } : {}) }));
+        // Tudo ou nada: o banco confere a senha e grava os lotes numa única operação.
+        const { data, error } = await supabase!.rpc("edit_import_shipments", { p_password: editPassword, p_new: payload, p_updates: updates });
+        if (error) { if (isWrongPassword(error)) { setImportRows(null); handleWriteError(error, ""); return; } throw error; }
+        created = Number(data?.created) || 0; corrected = Number(data?.corrected) || 0;
         await reload();
       }
       setImportRows(null);
@@ -288,27 +277,24 @@ export default function Home() {
   if(loading)return <div className="loading"><Activity className="spin"/> Sincronizando operação…</div>;
   return <main className={`shell original-polish ${tv?"tv":""}`}>
     <div className="ambient-grid" aria-hidden="true"><i/><i/><i/></div>
-    <header><button className="brand" onClick={()=>setView("board")}><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></button><span className="live"><i/> {connection.toUpperCase()}</span><nav><button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}><Activity size={16}/> Dashboard</button><button className={view==="board"?"active":""} onClick={()=>setView("board")}>Operação</button></nav>{profile&&localPreview&&demoUnlocked&&<button className="unlock-button unlocked" onClick={()=>setDemoUnlocked(false)}><ShieldCheck size={16}/> Edição liberada</button>}{profile&&!demoUnlocked&&<button className="unlock-button" onClick={()=>{if(localPreview){setDemoUnlocked(true);return}setAccessError("");setUnlockOpen(true)}}>Liberar alterações</button>}<button onClick={async()=>{if(tv){await document.exitFullscreen?.();setTv(false);}else{try{await document.documentElement.requestFullscreen?.();setTv(true);}catch{setTv(false);}}}}><Monitor size={16}/> {tv?"Sair da TV":"Modo TV"}</button></header>
+    <header><button className="brand" onClick={()=>setView("board")}><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></button><span className="live"><i/> {connection.toUpperCase()}</span><nav><button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}><Activity size={16}/> Dashboard</button><button className={view==="board"?"active":""} onClick={()=>setView("board")}>Operação</button></nav>{canWrite?<button className="unlock-button unlocked" title="Edição liberada neste navegador" onClick={()=>lockEditing("Edição bloqueada neste navegador.")}><Lock size={16}/> Bloquear edição</button>:<button className="unlock-button" onClick={()=>{setAccessError("");setDemoPassword("");setUnlockOpen(true)}}><ShieldCheck size={16}/> Liberar edição</button>}<button onClick={async()=>{if(tv){await document.exitFullscreen?.();setTv(false);}else{try{await document.documentElement.requestFullscreen?.();setTv(true);}catch{setTv(false);}}}}><Monitor size={16}/> {tv?"Sair da TV":"Modo TV"}</button></header>
     {demo&&<div className="notice"><ShieldCheck size={16}/> Prévia local do site original · alterações de teste ficam neste navegador</div>}
-    {!demo&&!profile&&<div className="notice access-notice" role="status" style={{justifyContent:"space-between",flexWrap:"wrap"}}><span style={{display:"flex",alignItems:"center",gap:8}}><ShieldCheck size={16}/>{loginNotice||"Entre com seu usuário autorizado para consultar os embarques. Os indicadores ficam indisponíveis até a conexão."}</span><button type="button" style={{marginLeft:"auto",padding:"7px 12px",border:"1px solid #ff5a00",borderRadius:6,background:"#fff",color:"#bd4a0b",fontWeight:600}} onClick={()=>setLoginOpen(true)}>Entrar</button></div>}
     {message&&<div className="toast" role="status">{message}<button onClick={()=>setMessage("")}><X size={16}/></button></div>}
-    {unlockOpen&&<DemoUnlock password={demoPassword} setPassword={setDemoPassword} submit={event=>{unlockDemo(event);if(demoPassword===DEMO_PASSWORD)setUnlockOpen(false)}} onClose={()=>setUnlockOpen(false)} error={accessError}/>}
+    {unlockOpen&&<DemoUnlock password={demoPassword} setPassword={setDemoPassword} submit={event=>void unlockEditing(event)} busy={unlocking} onClose={()=>setUnlockOpen(false)} error={accessError}/>}
     {view==="board"&&<>
       <section className="command-hero">
       <section className="heading"><div><p>PACKEM / CENTRAL DE EXPEDIÇÃO</p><h1>Controle de expedição<span>.</span></h1><p><i className="pulse-dot"/> Programação e acompanhamento dos lotes</p></div><div className="ops-live"><span><i/> {localPreview?"PRÉVIA DA OPERAÇÃO":"OPERAÇÃO AO VIVO"}</span><b>{now?new Date(now).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"--:--:--"}</b><small>{now?new Date(now).toLocaleDateString("pt-BR"):"Sincronizando"}</small></div><div className="heading-actions"><button type="button" onClick={()=>setSummaryDay(calendarDay&&calendarDay!=="undated"?calendarDay:dayKey(new Date()))}><ClipboardCopy size={18}/> Resumo diário</button>{canWrite&&<><label className={`pdf-upload ${importing?"disabled":""}`}><Upload size={18}/>{importing?"Lendo PDF…":"Carregar romaneio"}<input type="file" accept="application/pdf,.pdf" disabled={importing} onChange={event=>{void readPdf(event.target.files?.[0]);event.currentTarget.value=""}}/></label><button className="primary" onClick={()=>setModal({...emptyLoad(),scheduled_at:scheduledTimestamp((calendarDay&&calendarDay!=="undated"?calendarDay:!allDates&&calendarWeek!==weekStart(dayKey(new Date()))?calendarWeek:dayKey(new Date())))})}><Plus size={18}/> Adicionar lote</button></>}</div></section>
-      <section className="kpis">{[["Pendentes","Pendente",scheduledLoads.filter(x=>x.status==="Pendente").length,Clock],["Em processo","Em processo",scheduledLoads.filter(x=>x.status==="Em processo").length,Activity],["Falta item","Falta item",scheduledLoads.filter(x=>x.status==="Falta item").length,AlertTriangle],["Concluídos","Concluído",scheduledLoads.filter(x=>x.status==="Concluído").length,ArrowUpRight]].map(([label,stage,value,Icon]:any)=><button type="button" className={`kpi-action ${stageFilter===stage?"is-selected":""}`} key={label} onClick={()=>openStage(stage)} aria-label={'Abrir lotes: '+label}><div>{label}<Icon size={19}/></div><strong>{!demo&&!profile?"—":<AnimatedNumber value={value} pad={2}/>}</strong><small>{label==="Falta item"?"Necessitam regularização":"Lotes nesta situação"}</small></button>)}</section>
+      <section className="kpis">{[["Pendentes","Pendente",scheduledLoads.filter(x=>x.status==="Pendente").length,Clock],["Em processo","Em processo",scheduledLoads.filter(x=>x.status==="Em processo").length,Activity],["Falta item","Falta item",scheduledLoads.filter(x=>x.status==="Falta item").length,AlertTriangle],["Concluídos","Concluído",scheduledLoads.filter(x=>x.status==="Concluído").length,ArrowUpRight]].map(([label,stage,value,Icon]:any)=><button type="button" className={`kpi-action ${stageFilter===stage?"is-selected":""}`} key={label} onClick={()=>openStage(stage)} aria-label={'Abrir lotes: '+label}><div>{label}<Icon size={19}/></div><strong><AnimatedNumber value={value} pad={2}/></strong><small>{label==="Falta item"?"Necessitam regularização":"Lotes nesta situação"}</small></button>)}</section>
       </section>
       <section className="lot-search"><Search size={20}/><input aria-label="Pesquisar lote, unidade ou descrição" placeholder="Buscar lote, unidade ou descrição..." value={query} onChange={e=>{setQuery(e.target.value);}}/>{query&&<button aria-label="Limpar pesquisa" onClick={()=>setQuery("")}><X size={18}/></button>}<span>{query?'Buscando lotes em todas as situações':'Consulta rápida da operação'}</span></section>
-      <ShipmentWeek loads={loads} week={calendarWeek} selected={calendarDay} all={allDates} dataAvailable={demo||!!profile} onSelect={selectCalendar}/>
+      <ShipmentWeek loads={loads} week={calendarWeek} selected={calendarDay} all={allDates} onSelect={selectCalendar}/>
       <div className="request-tabs" ref={tabsRef} role="tablist" aria-label="Situação das requisições">{STAGES.map((stage,i)=><button role="tab" aria-selected={!query&&stageFilter===stage} className={`${!query&&stageFilter===stage?"active":""} tab-${i}`} key={stage} onClick={()=>{setQuery("");setStageFilter(stage)}}><span>{stage}</span></button>)}</div>
-      <div className="operation-grid"><section className="board-wrap"><div className="section-title"><div><small>PROGRAMAÇÃO DE LOTES</small><h2>{query?"Resultados da busca":stageFilter}</h2></div><span>{calendarDay==="undated"?"Sem data · ":calendarDay?`${shortDate(calendarDay)} · `:allDates?"Todas as datas · ":"Nesta semana · "}{!demo&&!profile?"—":filtered.length} registros</span></div>{filtered.length?<><div className="shipment-table-head" aria-hidden="true"><span>Lote / unidade</span><span>Data</span><span>Quantidade</span><span>Descrição</span><span>Situação</span><span>Ações</span></div><div className="request-grid" key={`${calendarWeek}-${calendarDay}-${stageFilter}-${currentPage}`}>{filtered.slice((currentPage-1)*12,currentPage*12).map(load=><LoadCard key={load.id} load={load} canWrite={!!canWrite} isAdmin={!!canWrite&&profile?.role==="admin"} onOpen={()=>setDetails(load)} onEdit={()=>setModal({...load,scheduled_at:load.scheduled_at})} onMove={move} onDelete={()=>setConfirmDelete(load)} onPhotoView={()=>setPhotoViewer(load)} photos={photos.filter(photo=>photo.shipment_id===load.id)}/>)}</div></>:<div className="empty-state"><Package/><h3>{!demo&&!profile?"Acesso necessário":"Nenhuma requisição nesta aba"}</h3><p>{!demo&&!profile?"Entre com seu usuário autorizado para consultar os embarques.":"Escolha outro dia, outra situação ou adicione um lote nesta programação."}</p></div>}</section><aside className="queue"><div className="section-title"><h2><Clock size={19}/> Prioridades</h2><span>fila</span></div>{queue.length?queue.map((load,i)=><button key={load.id} onClick={()=>setDetails(load)}><b>{String(i+1).padStart(2,"0")}</b><span><strong>{load.number} · {load.carrier}</strong><small>{load.status}</small></span></button>):<p className="empty">{!demo&&!profile?"Entre para consultar as prioridades.":"Nenhuma requisição na fila."}</p>}</aside></div>
+      <div className="operation-grid"><section className="board-wrap"><div className="section-title"><div><small>PROGRAMAÇÃO DE LOTES</small><h2>{query?"Resultados da busca":stageFilter}</h2></div><span>{calendarDay==="undated"?"Sem data · ":calendarDay?`${shortDate(calendarDay)} · `:allDates?"Todas as datas · ":"Nesta semana · "}{filtered.length} registros</span></div>{filtered.length?<><div className="shipment-table-head" aria-hidden="true"><span>Lote / unidade</span><span>Data</span><span>Quantidade</span><span>Descrição</span><span>Situação</span><span>Ações</span></div><div className="request-grid" key={`${calendarWeek}-${calendarDay}-${stageFilter}-${currentPage}`}>{filtered.slice((currentPage-1)*12,currentPage*12).map(load=><LoadCard key={load.id} load={load} canWrite={!!canWrite} isAdmin={!!canWrite} onOpen={()=>setDetails(load)} onEdit={()=>setModal({...load,scheduled_at:load.scheduled_at})} onMove={move} onDelete={()=>setConfirmDelete(load)} onPhotoView={()=>setPhotoViewer(load)} photos={photos.filter(photo=>photo.shipment_id===load.id)}/>)}</div></>:<div className="empty-state"><Package/><h3>Nenhuma requisição nesta aba</h3><p>Escolha outro dia, outra situação ou adicione um lote nesta programação.</p></div>}</section><aside className="queue"><div className="section-title"><h2><Clock size={19}/> Prioridades</h2><span>fila</span></div>{queue.length?queue.map((load,i)=><button key={load.id} onClick={()=>setDetails(load)}><b>{String(i+1).padStart(2,"0")}</b><span><strong>{load.number} · {load.carrier}</strong><small>{load.status}</small></span></button>):<p className="empty">Nenhuma requisição na fila.</p>}</aside></div>
     </>}
     {view==="board"&&pageCount>1&&<div className="pager"><button disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>Anterior</button><span>{currentPage} / {pageCount}</span><button disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}>Próxima</button></div>}
-    {view==="dashboard"&&(demo||profile?<OperationDashboard loads={loads} onExplore={(unit,status)=>{setAllDates(true);setCalendarDay("");setQuery(unit);setStageFilter(status);setView("board");setPage(1);}}/>:<div className="empty-state"><ShieldCheck/><h3>Acesso necessário</h3><p>Entre com seu usuário autorizado para carregar o painel. Os dados ainda não foram consultados.</p></div>)}
+    {view==="dashboard"&&<OperationDashboard loads={loads} onExplore={(unit,status)=>{setAllDates(true);setCalendarDay("");setQuery(unit);setStageFilter(status);setView("board");setPage(1);}}/>}
     {view==="history"&&<HistoryView audits={audits} loads={loads}/>}
-    {view==="team"&&profile?.role==="admin"&&<TeamView profiles={profiles} current={profile} onRole={setUserRole} onToggle={toggleUser} demo={demo}/>}
     {summaryDay&&<DailySummary loads={loads} initialDay={summaryDay} onClose={()=>setSummaryDay(null)}/>}
-    {loginOpen&&<Login login={login} setLogin={setLogin} submit={signIn} message={loginNotice} onClose={()=>setLoginOpen(false)}/>}
     {modal&&<LoadModal value={modal} photos={photos.filter(photo=>photo.shipment_id===modal.id)} onChange={setModal} onClose={()=>setModal(null)} onDeletePhoto={removeLoadPhoto} onSubmit={saveLoad}/>}
     {details&&<Details load={details} late={isLate(details,now)} photos={photos.filter(photo=>photo.shipment_id===details.id)} audits={audits.filter(audit=>audit.shipment_id===details.id)} onClose={()=>setDetails(null)} onEdit={canWrite?()=>{setModal({...details,scheduled_at:details.scheduled_at});setDetails(null)}:undefined}/>}
     {photoViewer&&<PhotoViewer load={photoViewer} photos={photos.filter(photo=>photo.shipment_id===photoViewer.id)} onClose={()=>setPhotoViewer(null)}/>}
@@ -373,18 +359,6 @@ function Details({load,onClose,onEdit,photos,audits}:{load:Shipment;late:boolean
 
 function HistoryView({audits,loads}:{audits:Audit[];loads:Shipment[]}){const fallback=loads.slice(0,6).map((l,i)=>({id:i,shipment_id:l.id,shipment_number:l.number,action:i%3===0?"INSERT":"UPDATE",actor_name:["Marina Costa","Rafael Souza"][i%2],created_at:new Date(Date.now()-i*1800000).toISOString(),before_data:null,after_data:l})) as Audit[];const data=audits.length?audits:fallback;return <section className="page-view"><div className="heading"><div><p>RASTREABILIDADE</p><h1>Histórico e auditoria<span>.</span></h1><p>Registro protegido das alterações na operação.</p></div></div><div className="timeline">{data.map(a=><article key={a.id}><span><History/></span><div><strong>{a.actor_name||"Sistema"} · {actionLabel[a.action]||a.action} a carga #{a.shipment_number}</strong><p>{a.after_data?.status&&`Status: ${a.after_data.status}`}</p><small>{new Date(a.created_at).toLocaleString("pt-BR")}</small></div></article>)}</div></section>}
 
-function TeamView({profiles,current,onRole,onToggle,demo}:{profiles:Profile[];current:Profile;onRole:(p:Profile,r:Role)=>void;onToggle:(p:Profile)=>void;demo:boolean}){const data:Profile[]=profiles.length?profiles:[current,{id:"operator",name:"Rafael Souza",role:"operador",active:true},{id:"viewer",name:"Lucas Martins",role:"visualizador",active:true}];return <section className="page-view"><div className="heading"><div><p>ADMINISTRAÇÃO</p><h1>Equipe e acessos<span>.</span></h1><p>Defina quem pode visualizar, operar e administrar.</p></div></div><div className="team-table"><div className="table-head"><span>Usuário</span><span>Perfil</span><span>Status</span></div>{data.map(p=><article key={p.id}><div><span className="avatar">{p.name.slice(0,2).toUpperCase()}</span><strong>{p.name}</strong>{p.id===current.id&&<small>Você</small>}</div><select aria-label={`Perfil de ${p.name}`} value={p.role} disabled={p.id===current.id} onChange={e=>onRole(p,e.target.value as Role)}><option value="visualizador">Visualizador</option><option value="operador">Operador</option><option value="admin">Admin</option></select><button disabled={demo||p.id===current.id} onClick={()=>onToggle(p)} className={p.active?"status-active":"status-off"}>{p.active?"Ativo":"Inativo"}</button></article>)}</div><div className="role-help"><h3>Permissões</h3><p><b>Visualizador</b> acompanha o painel e o histórico. <b>Operador</b> cadastra, edita e movimenta cargas. <b>Admin</b> também exclui cargas e gerencia a equipe.</p></div></section>}
-
 function Confirm({number,onClose,onConfirm}:{number:string;onClose:()=>void;onConfirm:()=>void}){return <div className="overlay"><section className="modal confirm"><AlertTriangle/><h2>Excluir carga #{number}?</h2><p>Esta ação será registrada na auditoria e não poderá ser desfeita.</p><footer><button onClick={onClose}>Cancelar</button><button className="danger" onClick={onConfirm}>Excluir definitivamente</button></footer></section></div>}
 
-function DemoAccess({password,setPassword,submit,error}:{password:string;setPassword:(value:string)=>void;submit:(event:FormEvent)=>void;error:string}){return <main className="access-page"><form className="access-card" onSubmit={submit}><div className="access-brand"><img src="/packem-mark.png" alt=""/><span>PACKEM<small>OPERAÇÕES</small></span></div><p className="access-eyebrow">CENTRAL DE EXPEDIÇÃO</p><h1>Acesso ao painel</h1><p className="access-copy">Informe a senha da operação para continuar.</p>{error&&<div className="access-error">{error}</div>}<label>Senha<input autoFocus type="password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="Digite a senha" required/></label><button className="primary" type="submit">Entrar</button><small className="access-footer">Ambiente demonstrativo protegido</small></form></main>}
-
-function DemoUnlock({password,setPassword,submit,onClose,error}:{password:string;setPassword:(value:string)=>void;submit:(event:FormEvent)=>void;onClose:()=>void;error:string}){return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><form className="modal unlock-modal" onSubmit={submit}><div className="modal-title"><div><small>CONTROLE DE ALTERAÇÕES</small><h2>Liberar operação</h2></div><button type="button" aria-label="Fechar janela" onClick={onClose}><X/></button></div><p>Digite a senha para movimentar os lotes e registrar falta de item.</p>{error&&<div className="access-error">{error}</div>}<label>Senha<input autoFocus type="password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="Digite a senha" required/></label><footer><button type="button" onClick={onClose}>Cancelar</button><button className="primary" type="submit">Liberar alterações</button></footer></form></div>}
-
-function Login({login,setLogin,submit,message,onClose}:{login:{email:string;password:string};setLogin:(v:{email:string;password:string})=>void;submit:(e:FormEvent)=>void;message:string;onClose:()=>void}){return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><form className="modal login-card" onSubmit={submit}><div className="modal-title"><div><small>ACESSO À OPERAÇÃO</small><h2>Entrar no painel</h2></div><button type="button" aria-label="Fechar janela" onClick={onClose}><X/></button></div><p>Use seu usuário autorizado para carregar os embarques.</p>{message&&<div className="warning">{message}</div>}<label>E-mail<input type="email" required value={login.email} onChange={e=>setLogin({...login,email:e.target.value})}/></label><label>Senha<input type="password" required value={login.password} onChange={e=>setLogin({...login,password:e.target.value})}/></label><footer><button type="button" onClick={onClose}>Cancelar</button><button className="primary" type="submit">Entrar no painel</button></footer></form></div>}
-
-
-
-
-
-
+function DemoUnlock({password,setPassword,submit,onClose,error,busy}:{password:string;setPassword:(value:string)=>void;submit:(event:FormEvent)=>void;onClose:()=>void;error:string;busy:boolean}){return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><form className="modal unlock-modal" onSubmit={submit}><div className="modal-title"><div><small>CONTROLE DE ALTERAÇÕES</small><h2>Digite a senha para editar</h2></div><button type="button" aria-label="Fechar janela" onClick={onClose}><X/></button></div><p>Todos podem acompanhar os embarques. Para adicionar, editar, excluir, mover lotes, enviar fotos ou importar romaneio, informe a senha. A edição fica liberada neste navegador até você clicar em Bloquear edição.</p>{error&&<div className="access-error">{error}</div>}<label>Senha<input autoFocus type="password" inputMode="numeric" autoComplete="off" value={password} onChange={event=>setPassword(event.target.value)} placeholder="Digite a senha" required/></label><footer><button type="button" onClick={onClose}>Cancelar</button><button className="primary" type="submit" disabled={busy}>{busy?"Conferindo…":"Liberar edição"}</button></footer></form></div>}
